@@ -91,7 +91,7 @@ while True:
 		if detection.Confidence >= 0.70:
 			# update the title bar and show current frame
 			output.SetStatus('confidence lvl is high enough and class is ' + str(net.GetClassDesc(detection.ClassID)))
-			cv2.imwrite("captured-bird-images/" + str(net.GetClassDesc(detection.ClassID)) + str(t.time()) + ".jpg", np.array(img)) # fix numpy array colors
+			cv2.imwrite("captured-bird-images/" + str(net.GetClassDesc(detection.ClassID)) + "_" + str(t.time()) + ".jpg", cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
 		
 	# print out performance info
 	net.PrintProfilerTimes()
