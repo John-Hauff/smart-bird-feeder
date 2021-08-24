@@ -21,7 +21,9 @@
 # DEALINGS IN THE SOFTWARE.
 #
 
-#import cv2
+import time as t
+import cv2
+import numpy as np
 import jetson.inference
 import jetson.utils
 
@@ -89,7 +91,7 @@ while True:
 		if detection.Confidence >= 0.70:
 			# update the title bar and show current frame
 			output.SetStatus('confidence lvl is high enough and class is ' + str(net.GetClassDesc(detection.ClassID)))
-#			cv2.imwrite("detected_bird.jpg", img)
+			cv2.imwrite("captured-bird-images/" + str(net.GetClassDesc(detection.ClassID)) + str(t.time()) + ".jpg", np.array(img)) # fix numpy array colors
 		
 	# print out performance info
 	net.PrintProfilerTimes()
