@@ -76,22 +76,16 @@ while True:
 	
 	# This loop works only when an object (or objects) is detected
 	for detection in detections:
-		print(str('the area is ' + str(detection.Area)))
-		print('the Bottom value is ' + str(detection.Bottom))
-		print('the Center value is ' + str(detection.Center))
-		print('the ClassID value is ' + str(detection.ClassID))
-		print(str(detection.Confidence) + ' is the confidence lvl')
-		print('the Height value is ' + str(detection.Height))
-		print('the Instance value is ' + str(detection.Instance))
-		print('the Left value is ' + str(detection.Left))
-		print('the Right value is ' + str(detection.Right))
-		print('the Top value is ' + str(detection.Top))
-		print('the Width value is ' + str(detection.Width))
-		
-		if detection.Confidence >= 0.70:
-			# update the title bar and show current frame
+		if detection.Confidence >= 0.90:
+			# Update the title bar and save current frame
 			output.SetStatus('confidence lvl is high enough and class is ' + str(net.GetClassDesc(detection.ClassID)))
-			cv2.imwrite("captured-bird-images/" + str(net.GetClassDesc(detection.ClassID)) + "_" + str(t.time()) + ".jpg", cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
+			
+			# Write the current frame as a .jpg to local storage
+			# Give the img name the class decription and a unique time stamp ID, then convert bgr2rgb
+			cv2.imwrite("captured-bird-images/" + \
+			str(net.GetClassDesc(detection.ClassID)) + \
+			"_" + str(t.time()) + ".jpg", \
+			 cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
 		
 	# print out performance info
 	net.PrintProfilerTimes()
