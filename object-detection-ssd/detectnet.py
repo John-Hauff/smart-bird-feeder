@@ -110,7 +110,7 @@ if __name__ == '__main__':
 	parser.add_argument("input_URI", type=str, default="", nargs='?', help="URI of the input stream")
 	parser.add_argument("output_URI", type=str, default="", nargs='?', help="URI of the output stream")
 	parser.add_argument("--network", type=str, default="ssd-mobilenet-v2", help="pre-trained model to load (see below for options)")
-	parser.add_argument("--overlay", type=str, default="box,labels,conf", help="detection overlay flags (e.g. --overlay=labels,conf)\nvalid combinations are:  'box', 'labels', 'conf', 'none'")
+	parser.add_argument("--overlay", type=str, default="none", help="detection overlay flags (e.g. --overlay=labels,conf)\nvalid combinations are:  'box', 'labels', 'conf', 'none'")
 	parser.add_argument("--threshold", type=float, default=0.5, help="minimum detection threshold to use") 
 
 	is_headless = ["--headless"] if sys.argv[0].find('console.py') != -1 else [""]
@@ -149,10 +149,11 @@ if __name__ == '__main__':
 		# This loop works only when an object (or objects) is detected
 		for detection in detections:
 			if detection.Confidence >= 0.90:
+				print(detection)
 				timestamp = str(t.time())
-				save_img(img, timestamp)
+			#	save_img(img, timestamp)
     
-				send_email(img, timestamp)
+			# send_email(img, timestamp)
 			
 		# print out performance info
 		net.PrintProfilerTimes()
