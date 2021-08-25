@@ -24,6 +24,15 @@
 import time as t
 import cv2
 import numpy as np
+
+import smtplib
+import email
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+from email.mime.base import MIMEBase
+from email import encoders
+
 import jetson.inference
 import jetson.utils
 
@@ -37,11 +46,55 @@ def update_title_bar(title):
 
 # Function that will write the current frame as a .jpg to local storage
 # The img name is the detected class description and a unique time stamp ID
-def save_img(image):
+def save_img(img, timestamp):
 	cv2.imwrite("captured-bird-images/" +
 	str(net.GetClassDesc(detection.ClassID)) +
-	"_" + str(t.time()) + ".jpg",
+	"_" + str(timestamp + ".jpg",
 	cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
+ 
+
+# TODO: Clean up and make sense out of this send email function (ask Paul)
+def send_email(img, timestamp):
+	# ------------------------------------Email photos----------------------------------------------
+	smtp_user = "sdgroup7project@gmail.com"
+	smtp_pass = "bQlh#cQLkZ%d"
+
+	# Destination
+	to_add = "matthew.a.wilkinson@gmail.com"
+	from_add = smtp_user
+
+	subject = "Bird feeder picture " + timestamp
+	msg = MIMEMultipart()
+	msg["Subject"] = subject
+	msg["From"] = from_add
+	msg["To"] = to_add
+
+	msg.preamble = "Photos from: " + timestamp
+
+	# Email Text
+	body = MIMEText("Photos from: " + timestamp)
+	msg.attach(body)
+
+	# Attach image of the bird that got high confidence.
+	fp = open('captured-bird-images-' + str(net.GetClassDesc(detection.ClassID)) + "_" + timestamp + '.jpg', 'rb')
+	img = MIMEImage(fp.read())
+	fp.close()
+	msg.attach(img)
+
+	# Send Email
+
+	# Gmail uses port 587.
+	s = smtplib.SMTP("smtp.gmail.com", 587)
+
+	# Encryption & sending email.
+	s.ehlo()
+	s.starttls()
+	s.ehlo()
+	s.login(smtp_user, smtp_pass)
+	s.sendmail(from_add, to_add, msg.as_string())
+	s.quit()
+
+	print("Email Sent.")
   
   
 if __name__ == '__main__':
@@ -94,7 +147,10 @@ if __name__ == '__main__':
 			if detection.Confidence >= 0.90:
 				update_title_bar("Confidence lvl is >= 90% and class is " + str(net.GetClassDesc(detection.ClassID)))
 
-				save_img(img)
+				timestamp = t.time()
+				save_img(img, timestamp)
+    
+				# send_email(img, timestamp)
 			
 		# print out performance info
 		net.PrintProfilerTimes()
