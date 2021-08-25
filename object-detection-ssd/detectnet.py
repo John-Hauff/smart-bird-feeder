@@ -49,11 +49,11 @@ def update_title_bar(title):
 def save_img(img, timestamp):
 	cv2.imwrite("captured-bird-images/" +
 	str(net.GetClassDesc(detection.ClassID)) +
-	"_" + str(timestamp + ".jpg",
-	cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
+	"_" + str(timestamp + ".jpg", cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB)))
  
 
 # TODO: Clean up and make sense out of this send email function (ask Paul)
+# Also - probably want to move this function to antoher file and import it instead (this would help avoid merge conflicts as well)
 def send_email(img, timestamp):
 	# ------------------------------------Email photos----------------------------------------------
 	smtp_user = "sdgroup7project@gmail.com"
@@ -106,7 +106,7 @@ if __name__ == '__main__':
 	parser.add_argument("input_URI", type=str, default="", nargs='?', help="URI of the input stream")
 	parser.add_argument("output_URI", type=str, default="", nargs='?', help="URI of the output stream")
 	parser.add_argument("--network", type=str, default="ssd-mobilenet-v2", help="pre-trained model to load (see below for options)")
-	parser.add_argument("--overlay", type=str, default="box,labels,conf", help="detection overlay flags (e.g. --overlay=box,labels,conf)\nvalid combinations are:  'box', 'labels', 'conf', 'none'")
+	parser.add_argument("--overlay", type=str, default="box,labels,conf", help="detection overlay flags (e.g. --overlay=labels,conf)\nvalid combinations are:  'box', 'labels', 'conf', 'none'")
 	parser.add_argument("--threshold", type=float, default=0.5, help="minimum detection threshold to use") 
 
 	is_headless = ["--headless"] if sys.argv[0].find('console.py') != -1 else [""]
