@@ -30,68 +30,77 @@ import jetson.utils
 import argparse
 import sys
 
-# parse the command line
-parser = argparse.ArgumentParser(description="Locate objects in a live camera stream using an object detection DNN.", 
-                                 formatter_class=argparse.RawTextHelpFormatter, epilog=jetson.inference.detectNet.Usage() +
-                                 jetson.utils.videoSource.Usage() + jetson.utils.videoOutput.Usage() + jetson.utils.logUsage())
+# Function to update title bar of capture window
+def update_title_bar(title):
+	output.SetStatus(title)
 
-parser.add_argument("input_URI", type=str, default="", nargs='?', help="URI of the input stream")
-parser.add_argument("output_URI", type=str, default="", nargs='?', help="URI of the output stream")
-parser.add_argument("--network", type=str, default="ssd-mobilenet-v2", help="pre-trained model to load (see below for options)")
-parser.add_argument("--overlay", type=str, default="box,labels,conf", help="detection overlay flags (e.g. --overlay=box,labels,conf)\nvalid combinations are:  'box', 'labels', 'conf', 'none'")
-parser.add_argument("--threshold", type=float, default=0.5, help="minimum detection threshold to use") 
 
-is_headless = ["--headless"] if sys.argv[0].find('console.py') != -1 else [""]
+# Function that will write the current frame as a .jpg to local storage
+# The img name is the detected class description and a unique time stamp ID
+def save_img(image):
+	cv2.imwrite("captured-bird-images/" +
+	str(net.GetClassDesc(detection.ClassID)) +
+	"_" + str(t.time()) + ".jpg",
+	cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
+  
+  
+if __name__ == '__main__':
+	# parse the command line
+	parser = argparse.ArgumentParser(description="Locate objects in a live camera stream using an object detection DNN.", 
+																	formatter_class=argparse.RawTextHelpFormatter, epilog=jetson.inference.detectNet.Usage() +
+																	jetson.utils.videoSource.Usage() + jetson.utils.videoOutput.Usage() + jetson.utils.logUsage())
 
-try:
-	opt = parser.parse_known_args()[0]
-except:
-	print("")
-	parser.print_help()
-	sys.exit(0)
+	parser.add_argument("input_URI", type=str, default="", nargs='?', help="URI of the input stream")
+	parser.add_argument("output_URI", type=str, default="", nargs='?', help="URI of the output stream")
+	parser.add_argument("--network", type=str, default="ssd-mobilenet-v2", help="pre-trained model to load (see below for options)")
+	parser.add_argument("--overlay", type=str, default="box,labels,conf", help="detection overlay flags (e.g. --overlay=box,labels,conf)\nvalid combinations are:  'box', 'labels', 'conf', 'none'")
+	parser.add_argument("--threshold", type=float, default=0.5, help="minimum detection threshold to use") 
 
-# load the object detection network
-net = jetson.inference.detectNet(opt.network, sys.argv, opt.threshold)
+	is_headless = ["--headless"] if sys.argv[0].find('console.py') != -1 else [""]
 
-# create video sources & outputs
-input = jetson.utils.videoSource(opt.input_URI, argv=sys.argv)
-output = jetson.utils.videoOutput(opt.output_URI, argv=sys.argv+is_headless)
+	try:
+		opt = parser.parse_known_args()[0]
+	except:
+		print("")
+		parser.print_help()
+		sys.exit(0)
 
-# process frames until the user exits
-while True:
-	# capture the next image
-	img = input.Capture()
+	# load the object detection network
+	net = jetson.inference.detectNet(opt.network, sys.argv, opt.threshold)
 
-	# detect objects in the image (with overlay chosen in parser arguments)
-	detections = net.Detect(img, overlay=opt.overlay)
+	# create video sources & outputs
+	input = jetson.utils.videoSource(opt.input_URI, argv=sys.argv)
+	output = jetson.utils.videoOutput(opt.output_URI, argv=sys.argv+is_headless)
 
-	# print the detections
-	print("detected {:d} objects in image".format(len(detections)))
+	# process frames until the user exits
+	while True:
+		# capture the next image
+		img = input.Capture()
 
-	# render the image
-	output.Render(img)
-	
-	# update the title bar
-	output.SetStatus("{:s} | Network {:.0f} FPS".format(opt.network, net.GetNetworkFPS()))
-	
-	# This loop works only when an object (or objects) is detected
-	for detection in detections:
-		if detection.Confidence >= 0.90:
-			# Update the title bar and save current frame
-			output.SetStatus('confidence lvl is high enough and class is ' + str(net.GetClassDesc(detection.ClassID)))
-			
-			# Write the current frame as a .jpg to local storage
-			# Give the img name the class decription and a unique time stamp ID, then convert bgr2rgb
-			cv2.imwrite("captured-bird-images/" + \
-			str(net.GetClassDesc(detection.ClassID)) + \
-			"_" + str(t.time()) + ".jpg", \
-			 cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
+		# detect objects in the image (with overlay chosen in parser arguments)
+		detections = net.Detect(img, overlay=opt.overlay)
+
+		# print the detections
+		print("detected {:d} objects in image".format(len(detections)))
+
+		# render the image
+		output.Render(img)
 		
-	# print out performance info
-	net.PrintProfilerTimes()
+		# update the title bar
+		output.SetStatus("{:s} | Network {:.0f} FPS".format(opt.network, net.GetNetworkFPS()))
+		
+		# This loop works only when an object (or objects) is detected
+		for detection in detections:
+			if detection.Confidence >= 0.90:
+				update_title_bar("Confidence lvl is >= 90% and class is " + str(net.GetClassDesc(detection.ClassID)))
 
-	# exit on input/output EOS
-	if not input.IsStreaming() or not output.IsStreaming():
-		break
+				save_img(img)
+			
+		# print out performance info
+		net.PrintProfilerTimes()
+
+		# exit on input/output EOS
+		if not input.IsStreaming() or not output.IsStreaming():
+			break
 
 
