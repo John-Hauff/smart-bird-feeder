@@ -49,18 +49,19 @@ def update_title_bar(title):
 def save_img(img, timestamp):
 	cv2.imwrite("captured-bird-images/" +
 	str(net.GetClassDesc(detection.ClassID)) +
-	"_" + str(timestamp + ".jpg", cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB)))
+	"_" + timestamp + ".jpg", cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
  
 
 # TODO: Clean up and make sense out of this send email function (ask Paul)
-# Also - probably want to move this function to antoher file and import it instead (this would help avoid merge conflicts as well)
+# Also - probably want to move this function to another file and import it instead (this would help avoid merge conflicts as well)
 def send_email(img, timestamp):
 	# ------------------------------------Email photos----------------------------------------------
 	smtp_user = "sdgroup7project@gmail.com"
 	smtp_pass = "bQlh#cQLkZ%d"
 
 	# Destination
-	to_add = "matthew.a.wilkinson@gmail.com"
+#	to_add = "matthew.a.wilkinson@gmail.com"
+	to_add = "jthauff@gmail.com"
 	from_add = smtp_user
 
 	subject = "Bird feeder picture " + timestamp
@@ -76,7 +77,10 @@ def send_email(img, timestamp):
 	msg.attach(body)
 
 	# Attach image of the bird that got high confidence.
-	fp = open('captured-bird-images-' + str(net.GetClassDesc(detection.ClassID)) + "_" + timestamp + '.jpg', 'rb')
+	fp = open("captured-bird-images/" +
+	str(net.GetClassDesc(detection.ClassID)) +
+	"_" + str(timestamp) + ".jpg", 'rb')
+	
 	img = MIMEImage(fp.read())
 	fp.close()
 	msg.attach(img)
@@ -134,7 +138,7 @@ if __name__ == '__main__':
 		detections = net.Detect(img, overlay=opt.overlay)
 
 		# print the detections
-		print("detected {:d} objects in image".format(len(detections)))
+		print("detected {:d} object(s) in image".format(len(detections)))
 
 		# render the image
 		output.Render(img)
@@ -145,12 +149,10 @@ if __name__ == '__main__':
 		# This loop works only when an object (or objects) is detected
 		for detection in detections:
 			if detection.Confidence >= 0.90:
-				update_title_bar("Confidence lvl is >= 90% and class is " + str(net.GetClassDesc(detection.ClassID)))
-
-				timestamp = t.time()
+				timestamp = str(t.time())
 				save_img(img, timestamp)
     
-				# send_email(img, timestamp)
+				send_email(img, timestamp)
 			
 		# print out performance info
 		net.PrintProfilerTimes()
