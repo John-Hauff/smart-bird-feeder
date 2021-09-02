@@ -5,10 +5,10 @@ import serial
 print("UART Demonstration Program")
 print("NVIDIA Jetson Nano Developer Kit")
 
-
+# Set up the serial port connection.
 serial_port = serial.Serial(
     port="/dev/ttyTHS1",
-    baudrate=115200,
+    baudrate=9600,
     bytesize=serial.EIGHTBITS,
     parity=serial.PARITY_NONE,
     stopbits=serial.STOPBITS_ONE,
@@ -18,16 +18,24 @@ time.sleep(1)
 
 try:
     # Send a simple header
-    serial_port.write("UART Demonstration Program\r\n".encode())
-    serial_port.write("NVIDIA Jetson Nano Developer Kit\r\n".encode())
+    #serial_port.write("UART Demonstration Program\r\n".encode())
+
+    # Write to the port when a squirl is detected or whatever the reason why.
+    serial_port.write("A".encode())
+
+    #serial_port.write("NVIDIA Jetson Nano Developer Kit\r\n".encode())
     while True:
         if serial_port.inWaiting() > 0:
+            # Read what is being sent by the board.
             data = serial_port.read()
+            # Print to the console. (unnecessary, used just for a visual)
             print(data)
+            # Write to the port whatever whever was recieved by the board.
             serial_port.write(data)
-            # if we get a carriage return, add a line feed too
+
+            # If we get a carriage return, add a line feed too
             # \r is a carriage return; \n is a line feed
-            # This is to help the tty program on the other end 
+            # This is to help the tty program on the other end
             # Windows is \r\n for carriage return, line feed
             # Macintosh and Linux use \n
             if data == "\r".encode():
