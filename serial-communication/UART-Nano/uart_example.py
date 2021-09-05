@@ -21,7 +21,7 @@ try:
     #serial_port.write("UART Demonstration Program\r\n".encode())
 
     # Write to the port when a squirl is detected or whatever the reason why.
-    serial_port.write("A".encode())
+    serial_port.write("d".encode())
 
     #serial_port.write("NVIDIA Jetson Nano Developer Kit\r\n".encode())
     while True:
