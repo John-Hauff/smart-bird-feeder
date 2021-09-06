@@ -7,7 +7,7 @@ import sys
 # Group 7
 # Senior Design 2
 # Instructures: Lei Wei, Samuel Richie, and Dr. Kar
-# UART code that on the Nano.
+# UART code that is on the Nano.
 
 print("UART Demonstration Program")
 print("NVIDIA Jetson Nano Developer Kit")
