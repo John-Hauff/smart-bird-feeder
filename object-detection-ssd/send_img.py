@@ -1,4 +1,5 @@
 import requests as req
+from requests.api import post
 
 def post_img():
     img_path = './captured-bird-images/bird_memory.jpeg' # path is constant (img overwritten)
@@ -10,3 +11,6 @@ def post_img():
         img_path, 'rb'), 'image/jpeg')}
     r = req.post(url, files=files)
     print(r.text)
+
+if __name__ == '__main__':
+    post_img()
