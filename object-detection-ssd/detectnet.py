@@ -39,6 +39,9 @@ import jetson.utils
 import argparse
 import sys
 
+# http post request img file in req body
+import send_img
+
 # Function to update title bar of capture window
 def update_title_bar(title):
 	output.SetStatus(title)
@@ -47,10 +50,9 @@ def update_title_bar(title):
 # Function that will write the current frame as a .jpg to local storage
 # The img name is the detected class description and a unique time stamp ID
 def save_img(img, timestamp):
-	cv2.imwrite("captured-bird-images/" +
-	str(net.GetClassDesc(detection.ClassID)) +
-	"_" + timestamp + ".jpg", cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
- 
+	cv2.imwrite("captured-bird-images/" + str('bird_memory' + ".jpeg", cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB)))
+	# str(net.GetClassDesc(detection.ClassID)) +
+	# "_" + timestamp + ".jpeg", cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
 
 # TODO: Clean up and make sense out of this send email function (ask Paul)
 # Also - probably want to move this function to another file and import it instead (this would help avoid merge conflicts as well)
