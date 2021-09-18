@@ -1,7 +1,6 @@
 import requests as req
-from requests.api import post
 
-def post_img():
+def post_bird_memory():
     img_path = './captured-bird-images/bird_memory.jpeg' # path is constant (img overwritten)
     url = 'https://smart-bird-feeder-api.herokuapp.com/user/post-bird-memory'
     # url = 'http://localhost:3000/user/post-bird-memory'
@@ -13,4 +12,4 @@ def post_img():
     print(r.text)
 
 if __name__ == '__main__':
-    post_img()
+    post_bird_memory()
