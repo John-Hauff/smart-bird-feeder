@@ -25,7 +25,6 @@ import time
 import cv2
 import numpy as np
 
-
 import jetson.inference
 import jetson.utils
 
@@ -37,9 +36,11 @@ import send_img
 # import emailing capabilities
 import emailer
 
+
 # Function to update title bar of capture window
 def update_title_bar(output, title):
 	output.SetStatus(title)
+
 
 # Function that will write the current frame as a .jpg to local storage
 # DEPRECATED APPROACH: The img name is the detected class description and a unique time stamp ID
@@ -49,6 +50,7 @@ def save_img(img, timestamp):
 	cv2.imwrite("captured-bird-images/" + str('bird_memory' + ".jpeg"), cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
 	# str(net.GetClassDesc(detection.ClassID)) +
 	# "_" + timestamp + ".jpeg", cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
+
 
 if __name__ == '__main__':
 	# parse the command line
@@ -111,5 +113,3 @@ if __name__ == '__main__':
 		# exit on input/output EOS
 		if not input.IsStreaming() or not output.IsStreaming():
 			break
-
-
