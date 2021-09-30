@@ -22,6 +22,7 @@
 #
 
 import time
+import serial
 import cv2
 import numpy as np
 
@@ -35,6 +36,24 @@ import sys
 import send_img
 # import emailing capabilities
 import emailer
+
+
+def serial_config():
+    print("UART Demo Program to signal ML net + camera to start")
+    print("NVIDIA Jetson Nano Developer Kit")
+
+
+    serial_port = serial.Serial(
+        port="/dev/ttyTHS1",
+        baudrate=9600,
+        bytesize=serial.EIGHTBITS,
+        parity=serial.PARITY_NONE,
+        stopbits=serial.STOPBITS_ONE,
+    )
+    # Wait a second to let the port initialize
+    time.sleep(1)
+
+    return serial_port
 
 
 # Function to update title bar of capture window
@@ -88,37 +107,80 @@ if __name__ == '__main__':
     output = jetson.utils.videoOutput(
         opt.output_URI, argv=sys.argv+is_headless)
 
-    # process frames until the user exits
-    while True:
-        # capture the next image
-        img = input.Capture()
+    # setup serial communication
+    serial_port = serial_config()
 
-        # detect objects in the image (with overlay chosen in parser arguments)
-        detections = net.Detect(img, overlay=opt.overlay)
 
-        # print the detections
-        print("detected {:d} object(s) in image".format(len(detections)))
+    ## TODO: Fix up indentation and placement of conditions and loops
+    try:
+        # Send a simple header
+        serial_port.write("UART Demo Program to signal ML net + camera to start\r\n".encode())
+        serial_port.write("NVIDIA Jetson Nano Developer Kit\r\n".encode())
 
-        # render the image
-        output.Render(img)
+        while True:
+            if serial_port.in_waiting > 0:
+                data = serial_port.read()
+                print(data)
+                serial_port.write(data)
 
-        # update the title bar
-        update_title_bar(output, "{:s} | Network {:.0f} FPS".format(
-            opt.network, net.GetNetworkFPS()))
+                if data == "\r".encode():
+                    # For Windows boxen on the other end
+                    serial_port.write("\n".encode())
 
-        # This loop works only when an object (or objects) is detected
-        for detection in detections:
-            if detection.Confidence >= 0.90:
-                print(detection)
-                # save capturedAt time (may not use)
-                timestamp = str(time.time())
-                save_img(img, timestamp)
-                send_img.post_bird_memory()
-                emailer.send_bird_memory(net, detection, img, timestamp)
+                if data == 'r'.encode():
+                    print('success!')
+                    serial_port.write("\n'r' was received!\n\r".encode())
+                    while True:
+                        # read serial port for start or stop message
+                        if serial_port.in_waiting > 0:
+                            data = serial_port.read()
+                            print(data)
+                            serial_port.write(data)
 
-        # print out performance info
-        net.PrintProfilerTimes()
+                            ### object detection code ###
+                            # process frames until the user exits
+                            # capture the next image
+                            img = input.Capture()
 
-        # exit on input/output EOS
-        if not input.IsStreaming() or not output.IsStreaming():
-            break
+                            # detect objects in the image (with overlay chosen in parser arguments)
+                            detections = net.Detect(img, overlay=opt.overlay)
+
+                            # print the detections
+                            print("detected {:d} object(s) in image".format(len(detections)))
+
+                            # render the image
+                            output.Render(img)
+
+                            # update the title bar
+                            update_title_bar(output, "{:s} | Network {:.0f} FPS".format(
+                                opt.network, net.GetNetworkFPS()))
+
+                            # This loop works only when an object (or objects) is detected
+                            for detection in detections:
+                                if detection.Confidence >= 0.90:
+                                    print(detection)
+                                    # save capturedAt time (may not use)
+                                    timestamp = str(time.time())
+                                    save_img(img, timestamp)
+                                    send_img.post_bird_memory()
+                                    emailer.send_bird_memory(net, detection, img, timestamp)
+
+                            # print out performance info
+                            net.PrintProfilerTimes()
+
+                            # exit on input/output EOS
+                            if not input.IsStreaming() or not output.IsStreaming():
+                                break
+
+    except KeyboardInterrupt:
+        print("Exiting Program")
+
+    except Exception as exception_error:
+        print("Error occurred. Exiting Program")
+        print("Error: " + str(exception_error))
+
+    finally:
+        serial_port.close()
+        pass
+
+

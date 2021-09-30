@@ -49,7 +49,7 @@ try:
     #serial_port.write("NVIDIA Jetson Nano Developer Kit\r\n".encode())
     Measurment = '0'
     while True:
-        if serial_port.inWaiting() > 0:
+        if serial_port.in_waiting > 0:
             # Read what is being sent by the board.
             data = serial_port.read()
             # We now are able to decode the data recieved from MSP.
