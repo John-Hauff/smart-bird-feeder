@@ -6,6 +6,7 @@ from email.mime.image import MIMEImage
 from email.mime.base import MIMEBase
 from email import encoders
 
+
 def send_bird_memory(net, detection, img, timestamp):
     # ~~~~~~~~~~~~~~~~~~ Email photos ~~~~~~~~~~~~~~~~~~ #
     smtp_user = "sdgroup7project@gmail.com"

@@ -1,7 +1,9 @@
 import requests as req
 
+
 def post_bird_memory():
-    img_path = './captured-bird-images/bird_memory.jpeg' # path is constant (img overwritten)
+    # path is constant (img overwritten)
+    img_path = './captured-bird-images/bird_memory.jpeg'
     url = 'https://smart-bird-feeder-api.herokuapp.com/user/post-bird-memory'
     # url = 'http://localhost:3000/user/post-bird-memory'
 
@@ -10,6 +12,7 @@ def post_bird_memory():
         img_path, 'rb'), 'image/jpeg')}
     r = req.post(url, files=files)
     print(r.text)
+
 
 if __name__ == '__main__':
     post_bird_memory()

@@ -26,21 +26,21 @@ time.sleep(1)
 try:
     # Send a simple header
     #serial_port.write("UART Demonstration Program\r\n".encode())
-    
+
     # If we recieve the letter H then the pcb needes to be notified to close the hatch.
     if len(sys.argv) > 1 and sys.argv[1] == 'H':
         serial_port.write("H".encode())
-        print (sys.argv[1])
+        print(sys.argv[1])
 
     # If we recieve the letter U then the pcb needes to be notified to check ultrasonic sensor.
     elif len(sys.argv) > 1 and sys.argv[1] == 'U':
         serial_port.write("U".encode())
-        print (sys.argv[1])
+        print(sys.argv[1])
 
     # If we recieve the letter S then the pcb needes to be notified to play noise from speaker.
     elif len(sys.argv) > 1 and sys.argv[1] == 'S':
         serial_port.write("S".encode())
-        print (sys.argv[1])
+        print(sys.argv[1])
 
     # Write to the port when a squirl is detected or whatever the reason why.
     else:
@@ -59,14 +59,14 @@ try:
                 #data = Integer.parseInt(data)
                 # See if it is a number and start concatenating the string into a number
                 if data.isnumeric():
-                    Measurment =  Measurment + data
+                    Measurment = Measurment + data
                 # If there is a letter e sent, then that means the measurment is done and we can process the value.
                 elif data == 'e':
                     print(int(Measurment))
             # Print to the console. (unnecessary, used just for a visual)
             print(data)
             # Write to the port whatever whever was recieved by the board.
-            #serial_port.write(data)
+            # serial_port.write(data)
 
             # If we get a carriage return, add a line feed too
             # \r is a carriage return; \n is a line feed
