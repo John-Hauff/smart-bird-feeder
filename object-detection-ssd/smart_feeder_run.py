@@ -169,7 +169,8 @@ if __name__ == '__main__':
                                     # save capturedAt time (may not use)
                                     timestamp = str(time.time())
                                     save_img(img, timestamp)
-                                    send_img.post_bird_memory()
+                                    # send req to save bird img & species name to db
+                                    send_img.post_bird_memory(str(net.GetClassDesc(detection.ClassID)))
                                     emailer.send_bird_memory(
                                         net, detection, img, timestamp)
 
