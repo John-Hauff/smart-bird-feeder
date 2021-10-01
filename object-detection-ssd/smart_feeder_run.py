@@ -42,7 +42,6 @@ def serial_config():
     print("UART Demo Program to signal ML net + camera to start")
     print("NVIDIA Jetson Nano Developer Kit")
 
-
     serial_port = serial.Serial(
         port="/dev/ttyTHS1",
         baudrate=9600,
@@ -110,14 +109,21 @@ if __name__ == '__main__':
     # setup serial communication
     serial_port = serial_config()
 
-
-    ## TODO: Fix up indentation and placement of conditions and loops
+    # TODO: Fix up indentation and placement of conditions and loops
     try:
         # Send a simple header
-        serial_port.write("UART Demo Program to signal ML net + camera to start\r\n".encode())
+        serial_port.write(
+            "UART Demo Program to signal ML net + camera to start\r\n".encode())
         serial_port.write("NVIDIA Jetson Nano Developer Kit\r\n".encode())
 
         while True:
+            # boolean to indicate when user closed window (remove from production)
+            end_prog = False
+            
+            # Exit program cycle if user closed window
+            if end_prog:
+                break
+            
             if serial_port.in_waiting > 0:
                 data = serial_port.read()
                 print(data)
@@ -130,13 +136,13 @@ if __name__ == '__main__':
                 if data == 'r'.encode():
                     print('success!')
                     serial_port.write("\n'r' was received!\n\r".encode())
-                    while True:
-                        # read serial port for start or stop message
-                        if serial_port.in_waiting > 0:
-                            data = serial_port.read()
-                            print(data)
-                            serial_port.write(data)
 
+                    while True:
+                        # read serial port for stop message (received when MCU's sensor stops detecting objects)
+                        if serial_port.in_waiting > 0 and serial_port.read() == 's'.encode():
+                            serial_port.write("\nstop signal received!\n\r".encode())
+                            break
+                        else:
                             ### object detection code ###
                             # process frames until the user exits
                             # capture the next image
@@ -146,7 +152,8 @@ if __name__ == '__main__':
                             detections = net.Detect(img, overlay=opt.overlay)
 
                             # print the detections
-                            print("detected {:d} object(s) in image".format(len(detections)))
+                            print("detected {:d} object(s) in image".format(
+                                len(detections)))
 
                             # render the image
                             output.Render(img)
@@ -163,13 +170,15 @@ if __name__ == '__main__':
                                     timestamp = str(time.time())
                                     save_img(img, timestamp)
                                     send_img.post_bird_memory()
-                                    emailer.send_bird_memory(net, detection, img, timestamp)
+                                    emailer.send_bird_memory(
+                                        net, detection, img, timestamp)
 
                             # print out performance info
                             net.PrintProfilerTimes()
 
                             # exit on input/output EOS
                             if not input.IsStreaming() or not output.IsStreaming():
+                                end_prog = True
                                 break
 
     except KeyboardInterrupt:
@@ -182,5 +191,3 @@ if __name__ == '__main__':
     finally:
         serial_port.close()
         pass
-
-
