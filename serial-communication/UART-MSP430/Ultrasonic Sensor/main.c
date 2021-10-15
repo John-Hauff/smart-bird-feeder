@@ -95,6 +95,19 @@ void init_ultrasonic_pins(void)
   P2OUT &= ~TRIG_PIN;             // Set TRIGGER (P2.1) pin to LOW
 }
 
+void init_motor(void){
+    P1DIR |= BIT6;
+    P1OUT = 0;
+    P1SEL |= BIT6;
+}
+
+void delay(){
+    volatile unsigned long i;
+    i = 49999;
+    do (i--);
+    while (i != 0);
+}
+
 /* Setup UART */
 void init_uart(void)
 {
@@ -156,6 +169,64 @@ __interrupt void USCI0RX_ISR(void)
           wait_ms(2000);                 // = 2 seconds
         }
     }
+
+    if(c == 'c'){
+        TA0CCR0 = 20000-1;
+        TA0CCR1 = 1000;
+
+        TA0CCTL1 = OUTMOD_7;
+        TA0CTL = TASSEL_2 + MC_1;
+
+        delay();
+        TA0CCR1 = 1000;
+        delay();
+        TA0CCR1 = 1250;
+        delay();
+        TA0CCR1 = 1500;
+        delay();
+        TA0CCR1 = 1750;
+        delay();
+        TA0CCR1 = 2000;
+        delay();
+        TA0CCR1 = 2250;
+        delay();
+        TA0CCR1 = 2500;
+
+        TA0CTL = MC_0;
+
+        IFG2 &= ~(UCA0RXIFG);                  // Clear Receiver flag
+        __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
+
+    }
+
+    if(c == 'o'){
+        TA0CCR0 = 20000-1;
+        TA0CCR1 = 2500;
+
+        TA0CCTL1 = OUTMOD_7;
+        TA0CTL = TASSEL_2 + MC_1;
+
+        delay();
+        TA0CCR1 = 2500;
+        delay();
+        TA0CCR1 = 2250;
+        delay();
+        TA0CCR1 = 2000;
+        delay();
+        TA0CCR1 = 1750;
+        delay();
+        TA0CCR1 = 1500;
+        delay();
+        TA0CCR1 = 1250;
+        delay();
+        TA0CCR1 = 1000;
+
+        TA0CTL = MC_0;
+
+        IFG2 &= ~(UCA0RXIFG);                  // Clear Receiver flag
+        __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
+    }
+
     else{
         IFG2 &= ~(UCA0RXIFG);                  // Clear Receiver flag
         __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
@@ -178,6 +249,7 @@ void main(void)
   init_ultrasonic_pins();
   init_uart();
   init_timer();
+  init_motor();
 
   __bis_SR_register(LPM0_bits + GIE); // Enter LPM0, Enable Interrupt
 
