@@ -170,17 +170,13 @@ __interrupt void USCI0RX_ISR(void)
         }
     }
 
-    if(c == 'c'){
+    if(c == 'o'){
         TA0CCR0 = 20000-1;
-        TA0CCR1 = 1000;
+        TA0CCR1 = 1500;
 
         TA0CCTL1 = OUTMOD_7;
         TA0CTL = TASSEL_2 + MC_1;
 
-        delay();
-        TA0CCR1 = 1000;
-        delay();
-        TA0CCR1 = 1250;
         delay();
         TA0CCR1 = 1500;
         delay();
@@ -191,6 +187,7 @@ __interrupt void USCI0RX_ISR(void)
         TA0CCR1 = 2250;
         delay();
         TA0CCR1 = 2500;
+        delay();
 
         TA0CTL = MC_0;
 
@@ -199,7 +196,7 @@ __interrupt void USCI0RX_ISR(void)
 
     }
 
-    if(c == 'o'){
+    if(c == 'c'){
         TA0CCR0 = 20000-1;
         TA0CCR1 = 2500;
 
@@ -217,9 +214,7 @@ __interrupt void USCI0RX_ISR(void)
         delay();
         TA0CCR1 = 1500;
         delay();
-        TA0CCR1 = 1250;
-        delay();
-        TA0CCR1 = 1000;
+
 
         TA0CTL = MC_0;
 
