@@ -109,6 +109,26 @@ if __name__ == '__main__':
     # setup serial communication
     serial_port = serial_config()
 
+    # dict for bird species labels to formatted names
+    species_names = {
+        'american-crow': 'american crow',
+        'blue-jay': 'blue jay',
+        'blue-gray-gnatcatcher': 'blue gray gnatcatcher',
+        'carolina-wren': 'carolina wren',
+        'common-grackle': 'common grackle',
+        'downy-woodpecker': 'downy woodpecker',
+        'gray-catbird': 'gray catbird',
+        'mourning-dove': 'mourning dove',
+        'northern-cardinal': 'northern cardinal',
+        'northern-mockingbird': 'northern mockingbird',
+        'palm-warbler': 'palm warbler',
+        'pileated-woodpecker': 'pileated woodpecker',
+        'red-bellied-woodpecker': 'red-bellied woodpecker',
+        'tufted-titmouse': 'tufted titmouse',
+        'yellow-rumped-warbler': 'yellow-rumped warbler',
+        'squirrel': 'squirrel'
+    }
+
     # TODO: Fix up indentation and placement of conditions and loops
     try:
         # Send a simple header
@@ -119,11 +139,11 @@ if __name__ == '__main__':
         while True:
             # boolean to indicate when user closed window (remove from production)
             end_prog = False
-            
+
             # Exit program cycle if user closed window
             if end_prog:
                 break
-            
+
             if serial_port.in_waiting > 0:
                 data = serial_port.read()
                 print(data)
@@ -140,7 +160,8 @@ if __name__ == '__main__':
                     while True:
                         # read serial port for stop message (received when MCU's sensor stops detecting objects)
                         if serial_port.in_waiting > 0 and serial_port.read() == 's'.encode():
-                            serial_port.write("\nstop signal received!\n\r".encode())
+                            serial_port.write(
+                                "\nstop signal received!\n\r".encode())
                             break
                         else:
                             ### object detection code ###
@@ -162,17 +183,39 @@ if __name__ == '__main__':
                             update_title_bar(output, "{:s} | Network {:.0f} FPS".format(
                                 opt.network, net.GetNetworkFPS()))
 
-                            # This loop works only when an object (or objects) is detected
+                            squirrelDetected = False
+
+                            # check if a squirrel was detected in the frame
                             for detection in detections:
-                                if detection.Confidence >= 0.90:
-                                    print(detection)
-                                    # save capturedAt time (may not use)
-                                    timestamp = str(time.time())
-                                    save_img(img, timestamp)
-                                    # send req to save bird img & species name to db
-                                    send_img.post_bird_memory(str(net.GetClassDesc(detection.ClassID)))
-                                    emailer.send_bird_memory(
-                                        net, detection, img, timestamp)
+                                if str(net.GetClassDesc(detection.ClassID)) == 'squirrel' and detection.Confidence >= .50:
+                                    print('squirrel detected!')  # debug
+                                    ## handle squirrel prescence ##
+                                    squirrelDetected = True
+                                    close_hatch_cmd = 'c'
+                                    # write msg to UART serial port
+                                    serial_port.write(close_hatch_cmd.encode())
+                                    break
+
+                            if not squirrelDetected:
+                                open_hatch_cmd = 'o'
+                                # write msg to UART serial port
+                                serial_port.write(open_hatch_cmd.encode())
+                                # this loop works only when an object (or objects) is detected
+                                for detection in detections:
+                                    if detection.Confidence >= 0.90:
+                                        print(detection)
+                                        ## handle confidently detected bird ##
+                                        # save capturedAt time (may not use)
+                                        timestamp = str(time.time())
+                                        save_img(img, timestamp)
+                                        # send req to save bird img & species name to db
+                                        species_label = str(
+                                            net.GetClassDesc(detection.ClassID))
+                                        # post saved bird memory with formatted species name
+                                        send_img.post_bird_memory(
+                                            species_names[species_label])
+                                        emailer.send_bird_memory(
+                                            net, detection, img, timestamp)
 
                             # print out performance info
                             net.PrintProfilerTimes()
