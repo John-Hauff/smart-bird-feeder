@@ -156,13 +156,12 @@ if __name__ == '__main__':
 
                 if data == 'r'.encode():
                     print('success!')
-                    serial_port.write("\n'r' was received!\n\r".encode())
+                    serial_port.write('a'.encode())  # ack msg
 
                     while True:
                         # read serial port for stop message (received when MCU's sensor stops detecting objects)
                         if serial_port.in_waiting > 0 and serial_port.read() == 's'.encode():
-                            serial_port.write(
-                                "\nstop signal received!\n\r".encode())
+                            serial_port.write('a'.encode())  # ack msg
                             break
                         else:
                             ### object detection code ###
@@ -221,8 +220,9 @@ if __name__ == '__main__':
                                         token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
                                         title = 'New Bird Memory! 🐦'
                                         message = 'A new bird memory has been captured!\nView it in your bird memories gallery.'
-                                        send_push_message(token, title, message)
-                                        #emailer.send_bird_memory(
+                                        send_push_message(
+                                            token, title, message)
+                                        # emailer.send_bird_memory(
                                         #    net, detection, img, timestamp)
 
                             # print out performance info
