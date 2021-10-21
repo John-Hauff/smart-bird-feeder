@@ -1,0 +1,17 @@
+BACKGROUND
+american-crow
+blue-jay
+blue-gray-gnatcatcher
+carolina-wren
+common-grackle
+downy-woodpecker
+gray-catbird
+mourning-dove
+cardinal
+northern-mockingbird
+palm-warbler
+pileated-woodpecker
+red-bellied-woodpecker
+tufted-titmouse
+yellow-rumped-warbler
+squirrel

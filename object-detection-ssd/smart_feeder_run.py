@@ -33,7 +33,9 @@ import argparse
 import sys
 
 # http post request img file in req body
-import send_img
+from send_img import post_bird_memory
+# push notifications
+from push_notification import send_push_message
 # import emailing capabilities
 import emailer
 
@@ -119,7 +121,7 @@ if __name__ == '__main__':
         'downy-woodpecker': 'downy woodpecker',
         'gray-catbird': 'gray catbird',
         'mourning-dove': 'mourning dove',
-        'northern-cardinal': 'northern cardinal',
+        'cardinal': 'northern cardinal',
         'northern-mockingbird': 'northern mockingbird',
         'palm-warbler': 'palm warbler',
         'pileated-woodpecker': 'pileated woodpecker',
@@ -129,7 +131,6 @@ if __name__ == '__main__':
         'squirrel': 'squirrel'
     }
 
-    # TODO: Fix up indentation and placement of conditions and loops
     try:
         # Send a simple header
         serial_port.write(
@@ -191,12 +192,14 @@ if __name__ == '__main__':
                                     print('squirrel detected!')  # debug
                                     ## handle squirrel prescence ##
                                     squirrelDetected = True
+                                    print('closing hatch')
                                     close_hatch_cmd = 'c'
                                     # write msg to UART serial port
                                     serial_port.write(close_hatch_cmd.encode())
                                     break
 
                             if not squirrelDetected:
+                                print('opening hatch')
                                 open_hatch_cmd = 'o'
                                 # write msg to UART serial port
                                 serial_port.write(open_hatch_cmd.encode())
@@ -212,10 +215,15 @@ if __name__ == '__main__':
                                         species_label = str(
                                             net.GetClassDesc(detection.ClassID))
                                         # post saved bird memory with formatted species name
-                                        send_img.post_bird_memory(
+                                        post_bird_memory(
                                             species_names[species_label])
-                                        emailer.send_bird_memory(
-                                            net, detection, img, timestamp)
+                                        # send push notification for newly added bird memory
+                                        token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
+                                        title = 'New Bird Memory! 🐦'
+                                        message = 'A new bird memory has been captured!\nView it in your bird memories gallery.'
+                                        send_push_message(token, title, message)
+                                        #emailer.send_bird_memory(
+                                        #    net, detection, img, timestamp)
 
                             # print out performance info
                             net.PrintProfilerTimes()

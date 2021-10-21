@@ -1,6 +1,5 @@
 # Ignore huge directories
 data
-models
 captured-bird-images
 
 .DS_Store

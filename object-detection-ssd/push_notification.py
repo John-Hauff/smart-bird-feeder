@@ -66,6 +66,6 @@ def send_push_message(token, title, message, extra=None):
 if __name__ == '__main__':
     token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
     title = 'New Bird Memory! 🐦'
-    message = 'A new bird memory has been captured!\nSee your bird memories gallery for more info.'
+    message = 'A new bird memory has been captured!\nView it in your bird memories gallery.'
 
     send_push_message(token, title, message)
