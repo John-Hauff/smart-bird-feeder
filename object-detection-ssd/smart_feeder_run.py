@@ -62,15 +62,65 @@ def update_title_bar(output, title):
     output.SetStatus(title)
 
 
+def squirrel_check(net, detections):
+    # check if a squirrel was detected in the frame
+    for detection in detections:
+        if str(net.GetClassDesc(detection.ClassID)) == 'squirrel' and detection.Confidence >= .50:
+            return True
+
+
+def handle_squirrel():
+    print('closing hatch')
+    close_hatch_cmd = 'c'
+    # write msg to UART serial port
+    serial_port.write(close_hatch_cmd.encode())
+
+
+def handle_bird(net, detections, species_names, img, counter, species_to_ignore):
+    print('opening hatch')
+    open_hatch_cmd = 'o'
+    # write msg to UART serial port
+    serial_port.write(open_hatch_cmd.encode())
+
+    # this loop works only when an object (or objects) is detected
+    for detection in detections:
+        species_label = str(net.GetClassDesc(detection.ClassID))
+
+        if counter == 150:
+            counter = 0
+            # set species occurence vals False so that we can detect them again.
+            # species_has_occured[species_to_ignore] = False
+            species_to_ignore = species_label
+            # species_has_occured = {species_label: False for species_label in species_has_occured}
+        else:
+            # Increment counter
+            counter += 1
+
+        if detection.Confidence >= 0.90 and species_to_ignore != species_label:
+            print(detection)
+            print('processing species: ' +
+                  str(net.GetClassDesc(detection.ClassID)))
+            ## handle confidently detected bird ##
+            # save capturedAt time (may not use)
+            timestamp = str(time.time())
+            # save_img(img, timestamp)
+            # post saved bird memory with formatted species name
+            # post_bird_memory(
+            #    species_names[species_label])
+            # send push notification for newly added bird memory
+            token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
+            title = 'New Bird Memory! 🐦'
+            message = 'A new bird memory has been captured!\nView it in your bird memories gallery.'
+            # send_push_message(token, title, message)
+            # emailer.send_bird_memory(
+            #    net, detection, img, timestamp)
+    return species_to_ignore
+
+
 # Function that will write the current frame as a .jpg to local storage
-# DEPRECATED APPROACH: The img name is the detected class description and a unique time stamp ID
-# CURRENT APPROACH: The img name will always be 'bird_memory.jpeg', and each new bird memory will
-# overwrite the old bird memory in local storage, which is fine as long as the image is backed up to the db
 def save_img(img, timestamp):
     cv2.imwrite("captured-bird-images/" + str('bird_memory' + ".jpeg"),
                 cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
-    # str(net.GetClassDesc(detection.ClassID)) +
-    # "_" + timestamp + ".jpeg", cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
 
 
 if __name__ == '__main__':
@@ -131,6 +181,30 @@ if __name__ == '__main__':
         'squirrel': 'squirrel'
     }
 
+    species_has_occured = {
+        'american-crow': False,
+        'blue-jay': False,
+        'blue-gray-gnatcatcher': False,
+        'carolina-wren': False,
+        'common-grackle': False,
+        'downy-woodpecker': False,
+        'gray-catbird': False,
+        'mourning-dove': False,
+        'cardinal': False,
+        'northern-mockingbird': False,
+        'palm-warbler': False,
+        'pileated-woodpecker': False,
+        'red-bellied-woodpecker': False,
+        'tufted-titmouse': False,
+        'yellow-rumped-warbler': False,
+        'squirrel': False
+    }
+
+    counter = 0
+    # Set an arbitrary bird species to start off with.
+    # This keeps track of what the last bird was.
+    species_to_ignore = 'american-crow'
+
     try:
         # Send a simple header
         serial_port.write(
@@ -138,13 +212,6 @@ if __name__ == '__main__':
         serial_port.write("NVIDIA Jetson Nano Developer Kit\r\n".encode())
 
         while True:
-            # boolean to indicate when user closed window (remove from production)
-            end_prog = False
-
-            # Exit program cycle if user closed window
-            if end_prog:
-                break
-
             if serial_port.in_waiting > 0:
                 data = serial_port.read()
                 print(data)
@@ -155,7 +222,7 @@ if __name__ == '__main__':
                     serial_port.write("\n".encode())
 
                 if data == 'r'.encode():
-                    print('success!')
+                    print('r received!')
                     serial_port.write('a'.encode())  # ack msg
 
                     while True:
@@ -164,7 +231,7 @@ if __name__ == '__main__':
                             serial_port.write('a'.encode())  # ack msg
                             break
                         else:
-                            ### object detection code ###
+                            ################################# object detection code #################################
                             # process frames until the user exits
                             # capture the next image
                             img = input.Capture()
@@ -183,54 +250,26 @@ if __name__ == '__main__':
                             update_title_bar(output, "{:s} | Network {:.0f} FPS".format(
                                 opt.network, net.GetNetworkFPS()))
 
-                            squirrelDetected = False
+                            squirrel_detected = False
 
                             # check if a squirrel was detected in the frame
-                            for detection in detections:
-                                if str(net.GetClassDesc(detection.ClassID)) == 'squirrel' and detection.Confidence >= .50:
-                                    print('squirrel detected!')  # debug
-                                    ## handle squirrel prescence ##
-                                    squirrelDetected = True
-                                    print('closing hatch')
-                                    close_hatch_cmd = 'c'
-                                    # write msg to UART serial port
-                                    serial_port.write(close_hatch_cmd.encode())
-                                    break
+                            squirrel_detected = squirrel_check(net, detections)
 
-                            if not squirrelDetected:
-                                print('opening hatch')
-                                open_hatch_cmd = 'o'
-                                # write msg to UART serial port
-                                serial_port.write(open_hatch_cmd.encode())
-                                # this loop works only when an object (or objects) is detected
-                                for detection in detections:
-                                    if detection.Confidence >= 0.90:
-                                        print(detection)
-                                        ## handle confidently detected bird ##
-                                        # save capturedAt time (may not use)
-                                        timestamp = str(time.time())
-                                        save_img(img, timestamp)
-                                        # send req to save bird img & species name to db
-                                        species_label = str(
-                                            net.GetClassDesc(detection.ClassID))
-                                        # post saved bird memory with formatted species name
-                                        post_bird_memory(
-                                            species_names[species_label])
-                                        # send push notification for newly added bird memory
-                                        token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
-                                        title = 'New Bird Memory! 🐦'
-                                        message = 'A new bird memory has been captured!\nView it in your bird memories gallery.'
-                                        send_push_message(
-                                            token, title, message)
-                                        # emailer.send_bird_memory(
-                                        #    net, detection, img, timestamp)
+                            if squirrel_detected:
+                                print('squirrel detected!')  # debug
+                                ## handle squirrel prescence ##
+                                handle_squirrel(serial_port)
+                                break  # stop processing current frame
+
+                            if not squirrel_detected:
+                                species_to_ignore = handle_bird(
+                                    net, detections, species_names, img, counter, species_to_ignore)
 
                             # print out performance info
                             net.PrintProfilerTimes()
 
                             # exit on input/output EOS
                             if not input.IsStreaming() or not output.IsStreaming():
-                                end_prog = True
                                 break
 
     except KeyboardInterrupt:
@@ -243,3 +282,6 @@ if __name__ == '__main__':
     finally:
         serial_port.close()
         pass
+
+
+
