@@ -43,6 +43,9 @@ import emailer
 token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
 # counter for counting interval to ignore a species for
 counter = 0
+hatch_is_closed = False
+hatch_is_open = True
+
 
 def serial_config():
     print("UART Demo Program to signal ML net + camera to start")
@@ -71,7 +74,10 @@ def should_check_feed_lvl(time1, time2):
     wait_time = 10  # waiting interval in seconds
     return (time2 - time1) >= wait_time
 
+
 def run_obj_detection(input, output, net, opt, serial_port, species_names, species_to_ignore):
+    global hatch_is_open, hatch_is_closed
+
     ################################# object detection code #################################
     # capture the next image
     img = input.Capture()
@@ -92,16 +98,21 @@ def run_obj_detection(input, output, net, opt, serial_port, species_names, speci
     squirrel_detected = False
 
     # check if a squirrel was detected in the frame
-    squirrel_detected = squirrel_check(net, detections)
+    squirrel_detected = is_squirrel_detected(net, detections)
 
     if squirrel_detected:
         print('squirrel detected!')  # debug
         ## handle squirrel prescence ##
         handle_squirrel(serial_port)
         return  # stop processing current frame
-
-    if not squirrel_detected:
-        species_to_ignore = handle_bird(net, detections, species_names, img, species_to_ignore)
+    else:
+        # squirrel was not detected -> open hatch if closed and handle bird detection
+        if hatch_is_closed:
+            open_hatch(serial_port)
+            hatch_is_open = True
+            hatch_is_closed = False
+        species_to_ignore = handle_bird(
+            net, detections, species_names, img, species_to_ignore)
 
     # print out performance info
     net.PrintProfilerTimes()
@@ -112,7 +123,22 @@ def run_obj_detection(input, output, net, opt, serial_port, species_names, speci
 
     return species_to_ignore
 
-def squirrel_check(net, detections):
+
+def open_hatch(serial_port):
+    print('opening hatch')
+    open_hatch_cmd = 'o'
+    # write msg to UART serial port
+    serial_port.write(open_hatch_cmd.encode())
+
+
+def close_hatch(serial_port):
+    print('closing hatch')
+    close_hatch_cmd = 'c'
+    # write msg to UART serial port
+    serial_port.write(close_hatch_cmd.encode())
+
+
+def is_squirrel_detected(net, detections):
     # check if a squirrel was detected in the frame
     for detection in detections:
         if str(net.GetClassDesc(detection.ClassID)) == 'squirrel' and detection.Confidence >= .50:
@@ -120,24 +146,21 @@ def squirrel_check(net, detections):
 
 
 def handle_squirrel(serial_port):
-    print('closing hatch')
-    close_hatch_cmd = 'c'
-    # write msg to UART serial port
-    serial_port.write(close_hatch_cmd.encode())
+    global hatch_is_open, hatch_is_closed
+
+    if hatch_is_open:
+        close_hatch(serial_port)
+        hatch_is_open = False
+        hatch_is_closed = True
 
 
 def handle_bird(net, detections, species_names, img, species_to_ignore):
     global counter
-    
-    print('opening hatch')
-    open_hatch_cmd = 'o'
-    # write msg to UART serial port
-    serial_port.write(open_hatch_cmd.encode())
 
     # this loop works only when an object (or objects) is detected
     for detection in detections:
         species_label = str(net.GetClassDesc(detection.ClassID))
-        
+
         if counter >= 150:
             print('counter is done and is {:d}'.format(counter))  # debug
             counter = 0
@@ -194,7 +217,8 @@ if __name__ == '__main__':
     parser.add_argument("--threshold", type=float, default=0.5,
                         help="minimum detection threshold to use")
 
-    is_headless = ["--headless"] if sys.argv[0].find('console.py') != -1 else [""]
+    is_headless = [
+        "--headless"] if sys.argv[0].find('console.py') != -1 else [""]
 
     try:
         opt = parser.parse_known_args()[0]
@@ -235,16 +259,21 @@ if __name__ == '__main__':
     }
 
     # Set an arbitrary bird species to start off with.
-    # This keeps track of what the last bird was.
+    # This keeps track of what the last bird detected was.
     species_to_ignore = 'squirrel'
+
+    # initially, open the feed door, set hatch opened flag, and reset hatch closed flag to False
+    hatch_is_closed = False
+    open_hatch(serial_port)
+    hatch_is_open = True
 
     try:
         # capture initial time to track when the ultrasonic sensor should next be pulsed
         time1 = time.time()
-        
+
         while True:
             time2 = time.time()
-            
+
             # check if it is time to check feed levels
             if should_check_feed_lvl(time1, time2):
                 # ask msp430 to read ultrasonic data and tell us if feed is low
@@ -252,7 +281,7 @@ if __name__ == '__main__':
                 print("'u' is sent")
                 # reset waiting time for next pulse to ultrasonic
                 time1 = time.time()
-                
+
             if serial_port.in_waiting > 0:
                 data = serial_port.read()
                 print(data)
@@ -263,7 +292,7 @@ if __name__ == '__main__':
                     title = 'Your birds are running out of food! ⚠️'
                     message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
                     send_push_message(token, title, message)
-                
+
                 if data == "\r".encode():
                     # For Windows boxen on the other end
                     serial_port.write("\n".encode())
@@ -272,11 +301,11 @@ if __name__ == '__main__':
                 if data == 'r'.encode():
                     print('r received!')
                     # serial_port.write('a'.encode())  # ack msg
-                    
+
                     # loop until serial port has stop message (received when MCU's sensor stops detecting presence)
                     while serial_port.in_waiting <= 0 or serial_port.read() != 's'.encode():
                         time2 = time.time()
-                        
+
                         # TODO: this is duplicate code. Figure out a way to refactor this.
                         # check if it is time to check feed levels
                         if should_check_feed_lvl(time1, time2):
@@ -297,7 +326,8 @@ if __name__ == '__main__':
                                 message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
                                 send_push_message(token, title, message)
 
-                        species_to_ignore = run_obj_detection(input, output, net, opt, serial_port, species_names, species_to_ignore)
+                        species_to_ignore = run_obj_detection(
+                            input, output, net, opt, serial_port, species_names, species_to_ignore)
 
     except KeyboardInterrupt:
         print("Exiting Program")
