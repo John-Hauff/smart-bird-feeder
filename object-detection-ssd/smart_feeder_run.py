@@ -39,6 +39,10 @@ from push_notification import send_push_message
 # import emailing capabilities
 import emailer
 
+# token for Expo push notifications
+token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
+# counter for counting interval to ignore a species for
+counter = 0
 
 def serial_config():
     print("UART Demo Program to signal ML net + camera to start")
@@ -67,6 +71,46 @@ def should_check_feed_lvl(time1, time2):
     wait_time = 10  # waiting interval in seconds
     return (time2 - time1) >= wait_time
 
+def run_obj_detection(input, output, net, opt, serial_port, species_names, species_to_ignore):
+    ################################# object detection code #################################
+    # capture the next image
+    img = input.Capture()
+
+    # detect objects in the image (with overlay chosen in parser arguments)
+    detections = net.Detect(img, overlay=opt.overlay)
+
+    # print the detections
+    print("detected {:d} object(s) in image".format(len(detections)))
+
+    # render the image
+    output.Render(img)
+
+    # update the title bar
+    update_title_bar(output, "{:s} | Network {:.0f} FPS".format(
+        opt.network, net.GetNetworkFPS()))
+
+    squirrel_detected = False
+
+    # check if a squirrel was detected in the frame
+    squirrel_detected = squirrel_check(net, detections)
+
+    if squirrel_detected:
+        print('squirrel detected!')  # debug
+        ## handle squirrel prescence ##
+        handle_squirrel(serial_port)
+        return  # stop processing current frame
+
+    if not squirrel_detected:
+        species_to_ignore = handle_bird(net, detections, species_names, img, species_to_ignore)
+
+    # print out performance info
+    net.PrintProfilerTimes()
+
+    # exit on input/output EOS
+    if not input.IsStreaming() or not output.IsStreaming():
+        return species_to_ignore
+
+    return species_to_ignore
 
 def squirrel_check(net, detections):
     # check if a squirrel was detected in the frame
@@ -82,7 +126,9 @@ def handle_squirrel(serial_port):
     serial_port.write(close_hatch_cmd.encode())
 
 
-def handle_bird(net, detections, species_names, img, counter, species_to_ignore):
+def handle_bird(net, detections, species_names, img, species_to_ignore):
+    global counter
+    
     print('opening hatch')
     open_hatch_cmd = 'o'
     # write msg to UART serial port
@@ -91,21 +137,23 @@ def handle_bird(net, detections, species_names, img, counter, species_to_ignore)
     # this loop works only when an object (or objects) is detected
     for detection in detections:
         species_label = str(net.GetClassDesc(detection.ClassID))
-
-        if counter == 150:
+        
+        if counter >= 150:
+            print('counter is done and is {:d}'.format(counter))  # debug
             counter = 0
-            # set species occurence vals False so that we can detect them again.
-            # species_has_occured[species_to_ignore] = False
+            # reassign species to ignore with the current detected species
             species_to_ignore = species_label
-            # species_has_occured = {species_label: False for species_label in species_has_occured}
         else:
             # Increment counter
             counter += 1
 
         if detection.Confidence >= 0.90 and species_to_ignore != species_label:
+            # reassign species to ignore with the current detected species
+            species_to_ignore = species_label
+
             print(detection)
             print('processing species: ' +
-                  str(net.GetClassDesc(detection.ClassID)))
+                  str(net.GetClassDesc(detection.ClassID)))  # debug
             ## handle confidently detected bird ##
             # save capturedAt time (may not use)
             timestamp = str(time.time())
@@ -114,7 +162,6 @@ def handle_bird(net, detections, species_names, img, counter, species_to_ignore)
             # post_bird_memory(
             #    species_names[species_label])
             # send push notification for newly added bird memory
-            token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
             title = 'New Bird Memory! 🐦'
             message = 'A new bird memory has been captured!\nView it in your bird memories gallery.'
             # send_push_message(token, title, message)
@@ -187,10 +234,9 @@ if __name__ == '__main__':
         'squirrel': 'squirrel'
     }
 
-    counter = 0
     # Set an arbitrary bird species to start off with.
     # This keeps track of what the last bird was.
-    species_to_ignore = 'american-crow'
+    species_to_ignore = 'squirrel'
 
     try:
         # capture initial time to track when the ultrasonic sensor should next be pulsed
@@ -213,9 +259,7 @@ if __name__ == '__main__':
 
                 # check if UART response indicates low feed
                 if data == 'l'.encode():
-                    print('reached "l" block')
                     # send push notification for low bird feed warning
-                    token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
                     title = 'Your birds are running out of food! ⚠️'
                     message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
                     send_push_message(token, title, message)
@@ -245,55 +289,15 @@ if __name__ == '__main__':
                         if serial_port.in_waiting > 0:
                             data = serial_port.read()
                             print(data)
-
+                            # TODO: this 'l' block is not getting triggered by UART for some reason. Figure it out pls
                             # check if UART response indicates low feed
                             if data == 'l'.encode():
-                                print('reached "l" block')
                                 # send push notification for low bird feed warning
-                                token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
                                 title = 'Your birds are running out of food! ⚠️'
                                 message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
                                 send_push_message(token, title, message)
 
-                        ################################# object detection code #################################
-                        # process frames until the user exits
-                        
-                        # capture the next image
-                        img = input.Capture()
-
-                        # detect objects in the image (with overlay chosen in parser arguments)
-                        detections = net.Detect(img, overlay=opt.overlay)
-
-                        # print the detections
-                        print("detected {:d} object(s) in image".format(len(detections)))
-
-                        # render the image
-                        output.Render(img)
-
-                        # update the title bar
-                        update_title_bar(output, "{:s} | Network {:.0f} FPS".format(
-                            opt.network, net.GetNetworkFPS()))
-
-                        squirrel_detected = False
-
-                        # check if a squirrel was detected in the frame
-                        squirrel_detected = squirrel_check(net, detections)
-
-                        if squirrel_detected:
-                            print('squirrel detected!')  # debug
-                            ## handle squirrel prescence ##
-                            handle_squirrel(serial_port)
-                            continue  # stop processing current frame
-
-                        if not squirrel_detected:
-                            species_to_ignore = handle_bird(net, detections, species_names, img, counter, species_to_ignore)
-
-                        # print out performance info
-                        net.PrintProfilerTimes()
-
-                        # exit on input/output EOS
-                        if not input.IsStreaming() or not output.IsStreaming():
-                            break
+                        species_to_ignore = run_obj_detection(input, output, net, opt, serial_port, species_names, species_to_ignore)
 
     except KeyboardInterrupt:
         print("Exiting Program")
