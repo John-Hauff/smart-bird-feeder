@@ -96,10 +96,14 @@ void init_ultrasonic_pins(void)
   P2OUT &= ~TRIG_PIN; // Set TRIGGER (P2.1) pin to LOW
 }
 
+// Initialize the motors
 void init_motor(void)
 {
+  // The P1.6 is used for pwm and outpu to the servo.
   P1DIR |= BIT6;
+  // This clears all P1 outputs.
   P1OUT = 0;
+  // Selecting the TA0.1 option.
   P1SEL |= BIT6;
 }
 
@@ -178,12 +182,15 @@ __interrupt void USCI0RX_ISR(void)
   // UART msg contains "open" command 'o'
   if (UART_msg == 'o')
   {
+    // Set PWM period TA0.1.
     TA0CCR0 = 20000 - 1;
+    // This sets 1.5 ms as 0 degrees, servo position. 
     TA0CCR1 = 1500;
 
     TA0CCTL1 = OUTMOD_7;
     TA0CTL = TASSEL_2 + MC_1;
 
+    // This for loop moves the motor to 90 degrees.
     for (i = 1500; i <= 2500; i += 250)
     {
       delay();
@@ -199,12 +206,15 @@ __interrupt void USCI0RX_ISR(void)
   // UART msg contains "close" command 'c'
   if (UART_msg == 'c')
   {
+    // Set PWM period TA0.1.
     TA0CCR0 = 20000 - 1;
+    // This sets 2.5 ms as 90 degrees, servo position.
     TA0CCR1 = 2500;
 
     TA0CCTL1 = OUTMOD_7;
     TA0CTL = TASSEL_2 + MC_1;
 
+    // This for loop is to close the hatch.
     for (i = 2500; i >= 1500; i -= 250)
     {
       delay();
