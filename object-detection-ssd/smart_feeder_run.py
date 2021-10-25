@@ -62,6 +62,12 @@ def update_title_bar(output, title):
     output.SetStatus(title)
 
 
+def should_check_feed_lvl(time1, time2):
+    # TODO: adjust wait time for low feed check
+    wait_time = 10  # waiting interval in seconds
+    return (time2 - time1) >= wait_time
+
+
 def squirrel_check(net, detections):
     # check if a squirrel was detected in the frame
     for detection in detections:
@@ -69,7 +75,7 @@ def squirrel_check(net, detections):
             return True
 
 
-def handle_squirrel():
+def handle_squirrel(serial_port):
     print('closing hatch')
     close_hatch_cmd = 'c'
     # write msg to UART serial port
@@ -114,6 +120,7 @@ def handle_bird(net, detections, species_names, img, counter, species_to_ignore)
             # send_push_message(token, title, message)
             # emailer.send_bird_memory(
             #    net, detection, img, timestamp)
+
     return species_to_ignore
 
 
@@ -140,8 +147,7 @@ if __name__ == '__main__':
     parser.add_argument("--threshold", type=float, default=0.5,
                         help="minimum detection threshold to use")
 
-    is_headless = [
-        "--headless"] if sys.argv[0].find('console.py') != -1 else [""]
+    is_headless = ["--headless"] if sys.argv[0].find('console.py') != -1 else [""]
 
     try:
         opt = parser.parse_known_args()[0]
@@ -181,96 +187,113 @@ if __name__ == '__main__':
         'squirrel': 'squirrel'
     }
 
-    species_has_occured = {
-        'american-crow': False,
-        'blue-jay': False,
-        'blue-gray-gnatcatcher': False,
-        'carolina-wren': False,
-        'common-grackle': False,
-        'downy-woodpecker': False,
-        'gray-catbird': False,
-        'mourning-dove': False,
-        'cardinal': False,
-        'northern-mockingbird': False,
-        'palm-warbler': False,
-        'pileated-woodpecker': False,
-        'red-bellied-woodpecker': False,
-        'tufted-titmouse': False,
-        'yellow-rumped-warbler': False,
-        'squirrel': False
-    }
-
     counter = 0
     # Set an arbitrary bird species to start off with.
     # This keeps track of what the last bird was.
     species_to_ignore = 'american-crow'
 
     try:
-        # Send a simple header
-        serial_port.write(
-            "UART Demo Program to signal ML net + camera to start\r\n".encode())
-        serial_port.write("NVIDIA Jetson Nano Developer Kit\r\n".encode())
-
+        # capture initial time to track when the ultrasonic sensor should next be pulsed
+        time1 = time.time()
+        
         while True:
+            time2 = time.time()
+            
+            # check if it is time to check feed levels
+            if should_check_feed_lvl(time1, time2):
+                # ask msp430 to read ultrasonic data and tell us if feed is low
+                serial_port.write('u'.encode())
+                print("'u' is sent")
+                # reset waiting time for next pulse to ultrasonic
+                time1 = time.time()
+                
             if serial_port.in_waiting > 0:
                 data = serial_port.read()
                 print(data)
-                serial_port.write(data)
 
+                # check if UART response indicates low feed
+                if data == 'l'.encode():
+                    print('reached "l" block')
+                    # send push notification for low bird feed warning
+                    token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
+                    title = 'Your birds are running out of food! ⚠️'
+                    message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
+                    send_push_message(token, title, message)
+                
                 if data == "\r".encode():
                     # For Windows boxen on the other end
                     serial_port.write("\n".encode())
 
+                # check if MSP430 wants model to perform object detection
                 if data == 'r'.encode():
                     print('r received!')
-                    serial_port.write('a'.encode())  # ack msg
+                    # serial_port.write('a'.encode())  # ack msg
+                    
+                    # loop until serial port has stop message (received when MCU's sensor stops detecting presence)
+                    while serial_port.in_waiting <= 0 or serial_port.read() != 's'.encode():
+                        time2 = time.time()
+                        
+                        # TODO: this is duplicate code. Figure out a way to refactor this.
+                        # check if it is time to check feed levels
+                        if should_check_feed_lvl(time1, time2):
+                            # ask msp430 to read ultrasonic data and tell us if feed is low
+                            serial_port.write('u'.encode())
+                            print("'u' is sent")
+                            # reset waiting time for next pulse to ultrasonic
+                            time1 = time.time()
 
-                    while True:
-                        # read serial port for stop message (received when MCU's sensor stops detecting objects)
-                        if serial_port.in_waiting > 0 and serial_port.read() == 's'.encode():
-                            serial_port.write('a'.encode())  # ack msg
+                        if serial_port.in_waiting > 0:
+                            data = serial_port.read()
+                            print(data)
+
+                            # check if UART response indicates low feed
+                            if data == 'l'.encode():
+                                print('reached "l" block')
+                                # send push notification for low bird feed warning
+                                token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
+                                title = 'Your birds are running out of food! ⚠️'
+                                message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
+                                send_push_message(token, title, message)
+
+                        ################################# object detection code #################################
+                        # process frames until the user exits
+                        
+                        # capture the next image
+                        img = input.Capture()
+
+                        # detect objects in the image (with overlay chosen in parser arguments)
+                        detections = net.Detect(img, overlay=opt.overlay)
+
+                        # print the detections
+                        print("detected {:d} object(s) in image".format(len(detections)))
+
+                        # render the image
+                        output.Render(img)
+
+                        # update the title bar
+                        update_title_bar(output, "{:s} | Network {:.0f} FPS".format(
+                            opt.network, net.GetNetworkFPS()))
+
+                        squirrel_detected = False
+
+                        # check if a squirrel was detected in the frame
+                        squirrel_detected = squirrel_check(net, detections)
+
+                        if squirrel_detected:
+                            print('squirrel detected!')  # debug
+                            ## handle squirrel prescence ##
+                            handle_squirrel(serial_port)
+                            continue  # stop processing current frame
+
+                        if not squirrel_detected:
+                            species_to_ignore = handle_bird(net, detections, species_names, img, counter, species_to_ignore)
+
+                        # print out performance info
+                        net.PrintProfilerTimes()
+
+                        # exit on input/output EOS
+                        if not input.IsStreaming() or not output.IsStreaming():
                             break
-                        else:
-                            ################################# object detection code #################################
-                            # process frames until the user exits
-                            # capture the next image
-                            img = input.Capture()
-
-                            # detect objects in the image (with overlay chosen in parser arguments)
-                            detections = net.Detect(img, overlay=opt.overlay)
-
-                            # print the detections
-                            print("detected {:d} object(s) in image".format(
-                                len(detections)))
-
-                            # render the image
-                            output.Render(img)
-
-                            # update the title bar
-                            update_title_bar(output, "{:s} | Network {:.0f} FPS".format(
-                                opt.network, net.GetNetworkFPS()))
-
-                            squirrel_detected = False
-
-                            # check if a squirrel was detected in the frame
-                            squirrel_detected = squirrel_check(net, detections)
-
-                            if squirrel_detected:
-                                print('squirrel detected!')  # debug
-                                ## handle squirrel prescence ##
-                                handle_squirrel(serial_port)
-                                break  # stop processing current frame
-
-                            if not squirrel_detected:
-                                species_to_ignore = handle_bird(
-                                    net, detections, species_names, img, counter, species_to_ignore)
-
-                            # print out performance info
-                            net.PrintProfilerTimes()
-
-                            # exit on input/output EOS
-                            if not input.IsStreaming() or not output.IsStreaming():
-                                break
 
     except KeyboardInterrupt:
         print("Exiting Program")
