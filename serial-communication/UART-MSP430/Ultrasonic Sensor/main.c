@@ -76,6 +76,7 @@ void __attribute__((interrupt(TIMER1_A0_VECTOR))) ta1_isr(void)
       distance = (unsigned long)(delta_time / 0.00583090379);       // micrometers
       print("\r\n");
       if (distance / 10000 >= 2.0 && distance / 10000 <= 400)       // HC-SR04 acceptible measure ranges
+
       {
         printNumber(distance);
       }
@@ -97,8 +98,8 @@ void init_ultrasonic_pins(void)
 
 void init_motor(void){
     P1DIR |= BIT6;
-    P1OUT = 0;
     P1SEL |= BIT6;
+    P1OUT = 0;
 }
 
 void delay(){
@@ -157,9 +158,9 @@ __interrupt void USCI0RX_ISR(void)
     char c;
     int i = 0;
     c = UCA0RXBUF;
-    if(c == 'd'){
+    if(c == 'u'){
         __enable_interrupt();           // Global Interrupt Enable
-        while (i < 8)
+        while (i < 6)
         {
           reset_timer();
           P2OUT |= TRIG_PIN;            // Start of Pulse
@@ -168,6 +169,7 @@ __interrupt void USCI0RX_ISR(void)
           i += 1;
           wait_ms(2000);                 // = 2 seconds
         }
+
     }
 
     if(c == 'o'){
