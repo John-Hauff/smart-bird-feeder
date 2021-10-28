@@ -39,6 +39,13 @@ from push_notification import send_push_message
 # import emailing capabilities
 import emailer
 
+# token for Expo push notifications
+token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
+# counter for counting interval to ignore a species for
+counter = 0
+hatch_is_closed = False
+hatch_is_open = True
+
 
 def serial_config():
     print("UART Demo Program to signal ML net + camera to start")
@@ -62,15 +69,135 @@ def update_title_bar(output, title):
     output.SetStatus(title)
 
 
+def should_check_feed_lvl(time1, time2):
+    # TODO: adjust wait time for low feed check
+    wait_time = 10  # waiting interval in seconds
+    return (time2 - time1) >= wait_time
+
+
+def run_obj_detection(input, output, net, opt, serial_port, species_names, species_to_ignore):
+    global hatch_is_open, hatch_is_closed
+
+    ################################# object detection code #################################
+    # capture the next image
+    img = input.Capture()
+
+    # detect objects in the image (with overlay chosen in parser arguments)
+    detections = net.Detect(img, overlay=opt.overlay)
+
+    # print the detections
+    print("detected {:d} object(s) in image".format(len(detections)))
+
+    # render the image
+    output.Render(img)
+
+    # update the title bar
+    update_title_bar(output, "{:s} | Network {:.0f} FPS".format(
+        opt.network, net.GetNetworkFPS()))
+
+    squirrel_detected = False
+
+    # check if a squirrel was detected in the frame
+    squirrel_detected = is_squirrel_detected(net, detections)
+
+    if squirrel_detected:
+        print('squirrel detected!')  # debug
+        ## handle squirrel prescence ##
+        handle_squirrel(serial_port)
+        return  # stop processing current frame
+    else:
+        # squirrel was not detected -> open hatch if closed and handle bird detection
+        if hatch_is_closed:
+            open_hatch(serial_port)
+            hatch_is_open = True
+            hatch_is_closed = False
+        species_to_ignore = handle_bird(
+            net, detections, species_names, img, species_to_ignore)
+
+    # print out performance info
+    net.PrintProfilerTimes()
+
+    # exit on input/output EOS
+    if not input.IsStreaming() or not output.IsStreaming():
+        return species_to_ignore
+
+    return species_to_ignore
+
+
+def open_hatch(serial_port):
+    print('opening hatch')
+    open_hatch_cmd = 'o'
+    # write msg to UART serial port
+    serial_port.write(open_hatch_cmd.encode())
+
+
+def close_hatch(serial_port):
+    print('closing hatch')
+    close_hatch_cmd = 'c'
+    # write msg to UART serial port
+    serial_port.write(close_hatch_cmd.encode())
+
+
+def is_squirrel_detected(net, detections):
+    # check if a squirrel was detected in the frame
+    for detection in detections:
+        if str(net.GetClassDesc(detection.ClassID)) == 'squirrel' and detection.Confidence >= .50:
+            return True
+
+
+def handle_squirrel(serial_port):
+    global hatch_is_open, hatch_is_closed
+
+    if hatch_is_open:
+        close_hatch(serial_port)
+        hatch_is_open = False
+        hatch_is_closed = True
+
+
+def handle_bird(net, detections, species_names, img, species_to_ignore):
+    global counter
+
+    # this loop works only when an object (or objects) is detected
+    for detection in detections:
+        species_label = str(net.GetClassDesc(detection.ClassID))
+
+        if counter >= 150:
+            print('counter is done and is {:d}'.format(counter))  # debug
+            counter = 0
+            # reassign species to ignore with the current detected species
+            species_to_ignore = species_label
+        else:
+            # Increment counter
+            counter += 1
+
+        if detection.Confidence >= 0.90 and species_to_ignore != species_label:
+            # reassign species to ignore with the current detected species
+            species_to_ignore = species_label
+
+            print(detection)
+            print('processing species: ' +
+                  str(net.GetClassDesc(detection.ClassID)))  # debug
+            ## handle confidently detected bird ##
+            # save capturedAt time (may not use)
+            timestamp = str(time.time())
+            # save_img(img, timestamp)
+            # post saved bird memory with formatted species name
+            # post_bird_memory(
+            #    species_names[species_label])
+            # send push notification for newly added bird memory
+            title = 'New Bird Memory! 🐦'
+            message = 'A new bird memory has been captured!\nView it in your bird memories gallery.'
+            # send_push_message(token, title, message)
+            # emailer.send_bird_memory(
+            #    net, detection, img, timestamp)
+
+    return species_to_ignore
+
+
 # Function that will write the current frame as a .jpg to local storage
-# DEPRECATED APPROACH: The img name is the detected class description and a unique time stamp ID
-# CURRENT APPROACH: The img name will always be 'bird_memory.jpeg', and each new bird memory will
-# overwrite the old bird memory in local storage, which is fine as long as the image is backed up to the db
 def save_img(img, timestamp):
     cv2.imwrite("captured-bird-images/" + str('bird_memory' + ".jpeg"),
                 cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
-    # str(net.GetClassDesc(detection.ClassID)) +
-    # "_" + timestamp + ".jpeg", cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
 
 
 if __name__ == '__main__':
@@ -131,107 +258,76 @@ if __name__ == '__main__':
         'squirrel': 'squirrel'
     }
 
+    # Set an arbitrary bird species to start off with.
+    # This keeps track of what the last bird detected was.
+    species_to_ignore = 'squirrel'
+
+    # initially, open the feed door, set hatch opened flag, and reset hatch closed flag to False
+    hatch_is_closed = False
+    open_hatch(serial_port)
+    hatch_is_open = True
+
     try:
-        # Send a simple header
-        serial_port.write(
-            "UART Demo Program to signal ML net + camera to start\r\n".encode())
-        serial_port.write("NVIDIA Jetson Nano Developer Kit\r\n".encode())
+        # capture initial time to track when the ultrasonic sensor should next be pulsed
+        time1 = time.time()
 
         while True:
-            # boolean to indicate when user closed window (remove from production)
-            end_prog = False
+            time2 = time.time()
 
-            # Exit program cycle if user closed window
-            if end_prog:
-                break
+            # check if it is time to check feed levels
+            if should_check_feed_lvl(time1, time2):
+                # ask msp430 to read ultrasonic data and tell us if feed is low
+                serial_port.write('u'.encode())
+                print("'u' is sent")
+                # reset waiting time for next pulse to ultrasonic
+                time1 = time.time()
 
             if serial_port.in_waiting > 0:
                 data = serial_port.read()
                 print(data)
-                serial_port.write(data)
+
+                # check if UART response indicates low feed
+                if data == 'l'.encode():
+                    # send push notification for low bird feed warning
+                    title = 'Your birds are running out of food! ⚠️'
+                    message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
+                    send_push_message(token, title, message)
 
                 if data == "\r".encode():
                     # For Windows boxen on the other end
                     serial_port.write("\n".encode())
 
+                # check if MSP430 wants model to perform object detection
                 if data == 'r'.encode():
-                    print('success!')
-                    serial_port.write('a'.encode())  # ack msg
+                    print('r received!')
+                    # serial_port.write('a'.encode())  # ack msg
 
-                    while True:
-                        # read serial port for stop message (received when MCU's sensor stops detecting objects)
-                        if serial_port.in_waiting > 0 and serial_port.read() == 's'.encode():
-                            serial_port.write('a'.encode())  # ack msg
-                            break
-                        else:
-                            ### object detection code ###
-                            # process frames until the user exits
-                            # capture the next image
-                            img = input.Capture()
+                    # loop until serial port has stop message (received when MCU's sensor stops detecting presence)
+                    while serial_port.in_waiting <= 0 or serial_port.read() != 's'.encode():
+                        time2 = time.time()
 
-                            # detect objects in the image (with overlay chosen in parser arguments)
-                            detections = net.Detect(img, overlay=opt.overlay)
+                        # TODO: this is duplicate code. Figure out a way to refactor this.
+                        # check if it is time to check feed levels
+                        if should_check_feed_lvl(time1, time2):
+                            # ask msp430 to read ultrasonic data and tell us if feed is low
+                            serial_port.write('u'.encode())
+                            print("'u' is sent")
+                            # reset waiting time for next pulse to ultrasonic
+                            time1 = time.time()
 
-                            # print the detections
-                            print("detected {:d} object(s) in image".format(
-                                len(detections)))
+                        if serial_port.in_waiting > 0:
+                            data = serial_port.read()
+                            print(data)
+                            # TODO: this 'l' block is not getting triggered by UART for some reason. Figure it out pls
+                            # check if UART response indicates low feed
+                            if data == 'l'.encode():
+                                # send push notification for low bird feed warning
+                                title = 'Your birds are running out of food! ⚠️'
+                                message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
+                                send_push_message(token, title, message)
 
-                            # render the image
-                            output.Render(img)
-
-                            # update the title bar
-                            update_title_bar(output, "{:s} | Network {:.0f} FPS".format(
-                                opt.network, net.GetNetworkFPS()))
-
-                            squirrelDetected = False
-
-                            # check if a squirrel was detected in the frame
-                            for detection in detections:
-                                if str(net.GetClassDesc(detection.ClassID)) == 'squirrel' and detection.Confidence >= .50:
-                                    print('squirrel detected!')  # debug
-                                    ## handle squirrel prescence ##
-                                    squirrelDetected = True
-                                    print('closing hatch')
-                                    close_hatch_cmd = 'c'
-                                    # write msg to UART serial port
-                                    serial_port.write(close_hatch_cmd.encode())
-                                    break
-
-                            if not squirrelDetected:
-                                print('opening hatch')
-                                open_hatch_cmd = 'o'
-                                # write msg to UART serial port
-                                serial_port.write(open_hatch_cmd.encode())
-                                # this loop works only when an object (or objects) is detected
-                                for detection in detections:
-                                    if detection.Confidence >= 0.90:
-                                        print(detection)
-                                        ## handle confidently detected bird ##
-                                        # save capturedAt time (may not use)
-                                        timestamp = str(time.time())
-                                        save_img(img, timestamp)
-                                        # send req to save bird img & species name to db
-                                        species_label = str(
-                                            net.GetClassDesc(detection.ClassID))
-                                        # post saved bird memory with formatted species name
-                                        post_bird_memory(
-                                            species_names[species_label])
-                                        # send push notification for newly added bird memory
-                                        token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
-                                        title = 'New Bird Memory! 🐦'
-                                        message = 'A new bird memory has been captured!\nView it in your bird memories gallery.'
-                                        send_push_message(
-                                            token, title, message)
-                                        # emailer.send_bird_memory(
-                                        #    net, detection, img, timestamp)
-
-                            # print out performance info
-                            net.PrintProfilerTimes()
-
-                            # exit on input/output EOS
-                            if not input.IsStreaming() or not output.IsStreaming():
-                                end_prog = True
-                                break
+                        species_to_ignore = run_obj_detection(
+                            input, output, net, opt, serial_port, species_names, species_to_ignore)
 
     except KeyboardInterrupt:
         print("Exiting Program")
@@ -243,3 +339,6 @@ if __name__ == '__main__':
     finally:
         serial_port.close()
         pass
+
+
+
