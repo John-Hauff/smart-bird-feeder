@@ -49,7 +49,7 @@ void wait_ms(unsigned int ms)
   unsigned int i;
   for (i = 0; i <= ms; i++)
   {
-    __delay_cycles(1000); //1MHz clock --> 1E3/1E6 = 1E-3 (1ms)
+    __delay_cycles(1000); // 1MHz clock --> 1E3/1E6 = 1E-3 (1ms)
   }
 }
 
@@ -108,9 +108,8 @@ void delay()
   volatile unsigned long i;
   i = 49999;
   do
-  {
-    i--;
-  } while (i != 0);
+    (i--);
+  while (i != 0);
 }
 
 /* Setup UART */
@@ -152,16 +151,16 @@ void init_timer(void)
 
 void reset_timer(void)
 {
-  TA1CTL |= TACLR; //Clear timer
+  TA1CTL |= TACLR; // Clear timer
 }
 
 #pragma vector = USCIAB0RX_VECTOR // UART RX Interrupt Vector
 __interrupt void USCI0RX_ISR(void)
 {
-  char UART_msg;
+  char c;
   int i = 0;
-  UART_msg = UCA0RXBUF;
-  if (UART_msg == 'd')
+  c = UCA0RXBUF;
+  if (c == 'd')
   {
     __enable_interrupt(); // Global Interrupt Enable
     while (i < 8)
@@ -175,8 +174,7 @@ __interrupt void USCI0RX_ISR(void)
     }
   }
 
-  // UART msg contains "open" command 'o'
-  if (UART_msg == 'o')
+  if (c == 'o')
   {
     TA0CCR0 = 20000 - 1;
     TA0CCR1 = 1500;
@@ -184,11 +182,17 @@ __interrupt void USCI0RX_ISR(void)
     TA0CCTL1 = OUTMOD_7;
     TA0CTL = TASSEL_2 + MC_1;
 
-    for (i = 1500; i <= 2500; i += 250)
-    {
-      delay();
-      TA0CCR1 = i;
-    }
+    delay();
+    TA0CCR1 = 1500;
+    delay();
+    TA0CCR1 = 1750;
+    delay();
+    TA0CCR1 = 2000;
+    delay();
+    TA0CCR1 = 2250;
+    delay();
+    TA0CCR1 = 2500;
+    delay();
 
     TA0CTL = MC_0;
 
@@ -196,8 +200,7 @@ __interrupt void USCI0RX_ISR(void)
     __bis_SR_register(LPM0_bits + GIE); // Enter LPM0, Enable Interrupt
   }
 
-  // UART msg contains "close" command 'c'
-  if (UART_msg == 'c')
+  if (c == 'c')
   {
     TA0CCR0 = 20000 - 1;
     TA0CCR1 = 2500;
@@ -205,11 +208,17 @@ __interrupt void USCI0RX_ISR(void)
     TA0CCTL1 = OUTMOD_7;
     TA0CTL = TASSEL_2 + MC_1;
 
-    for (i = 2500; i >= 1500; i -= 250)
-    {
-      delay();
-      TA0CCR1 = i;
-    }
+    delay();
+    TA0CCR1 = 2500;
+    delay();
+    TA0CCR1 = 2250;
+    delay();
+    TA0CCR1 = 2000;
+    delay();
+    TA0CCR1 = 1750;
+    delay();
+    TA0CCR1 = 1500;
+    delay();
 
     TA0CTL = MC_0;
 
