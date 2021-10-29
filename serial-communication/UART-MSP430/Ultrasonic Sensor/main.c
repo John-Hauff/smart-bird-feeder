@@ -13,31 +13,34 @@ volatile unsigned long start_time;
 volatile unsigned long end_time;
 volatile unsigned long delta_time;
 volatile unsigned long distance;
+volatile unsigned long sum;
+char ch;
+volatile int i;
 
 void print(char *text)
 {
-    unsigned int i = 0;
-    while(text[i] != '\0')
-    {
-        while (!(IFG2 & UCA0TXIFG));        // Check if TX is ongoing
-        UCA0TXBUF = text[i];
-        i++;
-    }
+  unsigned int i = 0;
+  while(text[i] != '\0')
+  {
+    while (!(IFG2 & UCA0TXIFG));        // Check if TX is ongoing
+    UCA0TXBUF = text[i];
+    i++;
+  }
 }
 
 void printNumber(unsigned long num)
 {
-    char buf[8];
-    char *str = &buf[7];
+  char buf[8];
+  char *str = &buf[7];
 
-    *str = '\0';
+  *str = '\0';
 
-    do
-    {
-        unsigned long m = num;
-        num /= 10;
-        char c = (m - 10 * num) + '0';
-        *--str = c;
+  do
+  {
+    unsigned long m = num;
+    num /= 10;
+    char c = (m - 10 * num) + '0';
+    *--str = c;
     } while(num);
 
     print(str);
@@ -48,7 +51,7 @@ void wait_ms(unsigned int ms)
   unsigned int i;
   for (i = 0; i <= ms; i++)
   {
-      __delay_cycles(1000);             //1MHz clock --> 1E3/1E6 = 1E-3 (1ms)
+    __delay_cycles(1000);             //1MHz clock --> 1E3/1E6 = 1E-3 (1ms)
   }
 }
 
@@ -74,16 +77,13 @@ void __attribute__((interrupt(TIMER1_A0_VECTOR))) ta1_isr(void)
       end_time = TA1CCR0;
       delta_time = end_time - start_time;
       distance = (unsigned long)(delta_time / 0.00583090379);       // micrometers
-      print("\r\n");
       if (distance / 10000 >= 2.0 && distance / 10000 <= 400)       // HC-SR04 acceptible measure ranges
-
-      {
-        printNumber(distance);
-      }
+        {
+        sum += distance;
+        }
     }
-    break;
   }
-  TA1CTL &= ~CCIFG;                                                 // reset the interrupt flag
+  TACTL &= ~CCIFG; // reset the interrupt flag
 }
 
 /* Setup TRIGGER and ECHO pins */
@@ -97,22 +97,21 @@ void init_ultrasonic_pins(void)
 }
 
 void init_motor(void){
-    P1DIR |= BIT6;
-    P1SEL |= BIT6;
-    P1OUT = 0;
+  P1DIR |= BIT6;
+  P1SEL |= BIT6;
+  P1OUT = 0;
 }
 
 void delay(){
-    volatile unsigned long i;
-    i = 49999;
-    do (i--);
-    while (i != 0);
+  volatile unsigned long i;
+  i = 49999;
+  do (i--);
+  while (i != 0);
 }
 
 /* Setup UART */
 void init_uart(void)
 {
-
   P1SEL = BIT1 + BIT2 ;               // Select UART RX/TX function on P1.1,P1.2
   P1SEL2 = BIT1 + BIT2;
 
@@ -155,92 +154,94 @@ void reset_timer(void)
 #pragma vector=USCIAB0RX_VECTOR         // UART RX Interrupt Vector
 __interrupt void USCI0RX_ISR(void)
 {
-    char c;
-    int i = 0;
-    c = UCA0RXBUF;
-    if(c == 'u'){
-        __enable_interrupt();           // Global Interrupt Enable
-        while (i < 6)
-        {
-          reset_timer();
-          P2OUT |= TRIG_PIN;            // Start of Pulse
-          __delay_cycles(10);           // Send pulse for 10us
-          P2OUT &= ~TRIG_PIN;           // End of Pulse
-          i += 1;
-          wait_ms(2000);                 // = 2 seconds
-        }
-
+  char c;
+  c = UCA0RXBUF;
+  if(c == 'u'){
+    sum = 0;
+    i = 0;
+    while( i < 6) {
+      __enable_interrupt();         // Global Interrupt Enable
+      reset_timer();
+      P2OUT |= TRIG_PIN;            // Start of Pulse
+      __delay_cycles(10);           // Send pulse for 10us
+      P2OUT &= ~TRIG_PIN;           // End of Pulse
+      wait_ms(1000);                // = 1 seconds
+      i = i + 1;
+    }
+    sum = sum / 6;
+    if (sum < 60000){
+        print("h");
+    }
+    if (sum > 59999){
+        print("l");
     }
 
-    if(c == 'o'){
-        TA0CCR0 = 20000-1;
-        TA0CCR1 = 1500;
+    IFG2 &= ~(UCA0RXIFG);                  // Clear Receiver flag
+    __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
+  }
 
-        TA0CCTL1 = OUTMOD_7;
-        TA0CTL = TASSEL_2 + MC_1;
+  if(c == 'o'){
+    TA0CCR0 = 20000-1;
+    TA0CCR1 = 1500;
 
-        delay();
-        TA0CCR1 = 1500;
-        delay();
-        TA0CCR1 = 1750;
-        delay();
-        TA0CCR1 = 2000;
-        delay();
-        TA0CCR1 = 2250;
-        delay();
-        TA0CCR1 = 2500;
-        delay();
+    TA0CCTL1 = OUTMOD_7;
+    TA0CTL = TASSEL_2 + MC_1;
 
-        TA0CTL = MC_0;
+    delay();
+    TA0CCR1 = 1500;
+     delay();
+    // TA0CCR1 = 1750;
+    // delay();
+    TA0CCR1 = 2000;
+    delay();
+    // TA0CCR1 = 2250;
+    // delay();
+    TA0CCR1 = 2500;
+    delay();
 
-        IFG2 &= ~(UCA0RXIFG);                  // Clear Receiver flag
-        __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
+    TA0CTL = MC_0;
 
-    }
+    IFG2 &= ~(UCA0RXIFG);                  // Clear Receiver flag
+    __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
 
-    if(c == 'c'){
-        TA0CCR0 = 20000-1;
-        TA0CCR1 = 2500;
+  }
 
-        TA0CCTL1 = OUTMOD_7;
-        TA0CTL = TASSEL_2 + MC_1;
+  if(c == 'c'){
+    TA0CCR0 = 20000-1;
+    TA0CCR1 = 2500;
 
-        delay();
-        TA0CCR1 = 2500;
-        delay();
-        TA0CCR1 = 2250;
-        delay();
-        TA0CCR1 = 2000;
-        delay();
-        TA0CCR1 = 1750;
-        delay();
-        TA0CCR1 = 1500;
-        delay();
+    TA0CCTL1 = OUTMOD_7;
+    TA0CTL = TASSEL_2 + MC_1;
 
+    delay();
+    TA0CCR1 = 2500;
+    delay();
+    // TA0CCR1 = 2250;
+    // delay();
+    TA0CCR1 = 2000;
+    delay();
+    // TA0CCR1 = 1750;
+    // delay();
+    TA0CCR1 = 1500;
+    delay();
 
-        TA0CTL = MC_0;
+    TA0CTL = MC_0;
 
-        IFG2 &= ~(UCA0RXIFG);                  // Clear Receiver flag
-        __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
-    }
-
-    else{
-        IFG2 &= ~(UCA0RXIFG);                  // Clear Receiver flag
-        __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
-    }
-
+    IFG2 &= ~(UCA0RXIFG);                  // Clear Receiver flag
+    __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
+  }
 }
 
 void main(void)
 {
-  WDTCTL = WDTPW + WDTHOLD;           // Stop Watch Dog Timer
+  WDTCTL = WDTPW + WDTHOLD;             // Stop Watch Dog Timer
 
-  if (CALBC1_1MHZ==0xFF)              // Check if calibration constant erased
+  if (CALBC1_1MHZ==0xFF)                // Check if calibration constant erased
   {
-      while(1);                       // do not load program
+      while(1);                         // do not load program
   }
-  DCOCTL = 0;                         // Select lowest DCO settings
-  BCSCTL1 = CALBC1_1MHZ;              // Set DCO to 1 MHz
+  DCOCTL = 0;                           // Select lowest DCO settings
+  BCSCTL1 = CALBC1_1MHZ;                // Set DCO to 1 MHz
   DCOCTL = CALDCO_1MHZ;
 
   init_ultrasonic_pins();
@@ -248,6 +249,5 @@ void main(void)
   init_timer();
   init_motor();
 
-  __bis_SR_register(LPM0_bits + GIE); // Enter LPM0, Enable Interrupt
-
+  __bis_SR_register(LPM0_bits + GIE);   // Enter LPM0, Enable Interrupt
 }
