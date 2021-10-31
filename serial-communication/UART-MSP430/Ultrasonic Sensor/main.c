@@ -13,6 +13,9 @@ volatile unsigned long start_time;
 volatile unsigned long end_time;
 volatile unsigned long delta_time;
 volatile unsigned long distance;
+volatile unsigned long sum;
+char ch;
+volatile int i;
 
 void print(char *text)
 {
@@ -49,7 +52,7 @@ void wait_ms(unsigned int ms)
   unsigned int i;
   for (i = 0; i <= ms; i++)
   {
-    __delay_cycles(1000); //1MHz clock --> 1E3/1E6 = 1E-3 (1ms)
+    __delay_cycles(1000); // 1MHz clock --> 1E3/1E6 = 1E-3 (1ms)
   }
 }
 
@@ -75,15 +78,13 @@ void __attribute__((interrupt(TIMER1_A0_VECTOR))) ta1_isr(void)
       end_time = TA1CCR0;
       delta_time = end_time - start_time;
       distance = (unsigned long)(delta_time / 0.00583090379); // micrometers
-      print("\r\n");
       if (distance / 10000 >= 2.0 && distance / 10000 <= 400) // HC-SR04 acceptible measure ranges
       {
-        printNumber(distance);
+        sum += distance;
       }
     }
-    break;
   }
-  TA1CTL &= ~CCIFG; // reset the interrupt flag
+  TACTL &= ~CCIFG; // reset the interrupt flag
 }
 
 /* Setup TRIGGER and ECHO pins */
@@ -96,15 +97,11 @@ void init_ultrasonic_pins(void)
   P2OUT &= ~TRIG_PIN; // Set TRIGGER (P2.1) pin to LOW
 }
 
-// Initialize the motors
 void init_motor(void)
 {
-  // The P1.6 is used for pwm and outpu to the servo.
   P1DIR |= BIT6;
-  // This clears all P1 outputs.
-  P1OUT = 0;
-  // Selecting the TA0.1 option.
   P1SEL |= BIT6;
+  P1OUT = 0;
 }
 
 void delay()
@@ -112,15 +109,13 @@ void delay()
   volatile unsigned long i;
   i = 49999;
   do
-  {
-    i--;
-  } while (i != 0);
+    (i--);
+  while (i != 0);
 }
 
 /* Setup UART */
 void init_uart(void)
 {
-
   P1SEL = BIT1 + BIT2; // Select UART RX/TX function on P1.1,P1.2
   P1SEL2 = BIT1 + BIT2;
 
@@ -156,46 +151,61 @@ void init_timer(void)
 
 void reset_timer(void)
 {
-  TA1CTL |= TACLR; //Clear timer
+  TA1CTL |= TACLR; // Clear timer
 }
 
 #pragma vector = USCIAB0RX_VECTOR // UART RX Interrupt Vector
 __interrupt void USCI0RX_ISR(void)
 {
-  char UART_msg;
-  int i = 0;
-  UART_msg = UCA0RXBUF;
-  if (UART_msg == 'd')
+  char c;
+  c = UCA0RXBUF;
+  if (c == 'u')
   {
-    __enable_interrupt(); // Global Interrupt Enable
-    while (i < 8)
+    sum = 0;
+    i = 0;
+    while (i < 6)
     {
+      __enable_interrupt(); // Global Interrupt Enable
       reset_timer();
       P2OUT |= TRIG_PIN;  // Start of Pulse
       __delay_cycles(10); // Send pulse for 10us
       P2OUT &= ~TRIG_PIN; // End of Pulse
-      i += 1;
-      wait_ms(2000); // = 2 seconds
+      wait_ms(1000);      // = 1 seconds
+      i = i + 1;
     }
+    sum = sum / 6;
+    if (sum < 60000)
+    {
+      print("h");
+    }
+    if (sum > 59999)
+    {
+      print("l");
+    }
+
+    IFG2 &= ~(UCA0RXIFG);               // Clear Receiver flag
+    __bis_SR_register(LPM0_bits + GIE); // Enter LPM0, Enable Interrupt
   }
 
-  // UART msg contains "open" command 'o'
-  if (UART_msg == 'o')
+  if (c == 'o')
   {
-    // Set PWM period TA0.1.
     TA0CCR0 = 20000 - 1;
-    // This sets 1.5 ms as 0 degrees, servo position. 
     TA0CCR1 = 1500;
 
     TA0CCTL1 = OUTMOD_7;
     TA0CTL = TASSEL_2 + MC_1;
 
-    // This for loop moves the motor to 90 degrees.
-    for (i = 1500; i <= 2500; i += 250)
-    {
-      delay();
-      TA0CCR1 = i;
-    }
+    delay();
+    TA0CCR1 = 1500;
+    delay();
+    // TA0CCR1 = 1750;
+    // delay();
+    TA0CCR1 = 2000;
+    delay();
+    // TA0CCR1 = 2250;
+    // delay();
+    TA0CCR1 = 2500;
+    delay();
 
     TA0CTL = MC_0;
 
@@ -203,32 +213,28 @@ __interrupt void USCI0RX_ISR(void)
     __bis_SR_register(LPM0_bits + GIE); // Enter LPM0, Enable Interrupt
   }
 
-  // UART msg contains "close" command 'c'
-  if (UART_msg == 'c')
+  if (c == 'c')
   {
-    // Set PWM period TA0.1.
     TA0CCR0 = 20000 - 1;
-    // This sets 2.5 ms as 90 degrees, servo position.
     TA0CCR1 = 2500;
 
     TA0CCTL1 = OUTMOD_7;
     TA0CTL = TASSEL_2 + MC_1;
 
-    // This for loop is to close the hatch.
-    for (i = 2500; i >= 1500; i -= 250)
-    {
-      delay();
-      TA0CCR1 = i;
-    }
+    delay();
+    TA0CCR1 = 2500;
+    delay();
+    // TA0CCR1 = 2250;
+    // delay();
+    TA0CCR1 = 2000;
+    delay();
+    // TA0CCR1 = 1750;
+    // delay();
+    TA0CCR1 = 1500;
+    delay();
 
     TA0CTL = MC_0;
 
-    IFG2 &= ~(UCA0RXIFG);               // Clear Receiver flag
-    __bis_SR_register(LPM0_bits + GIE); // Enter LPM0, Enable Interrupt
-  }
-
-  else
-  {
     IFG2 &= ~(UCA0RXIFG);               // Clear Receiver flag
     __bis_SR_register(LPM0_bits + GIE); // Enter LPM0, Enable Interrupt
   }
