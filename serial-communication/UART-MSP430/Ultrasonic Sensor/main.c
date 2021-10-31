@@ -90,18 +90,22 @@ void __attribute__((interrupt(TIMER1_A0_VECTOR))) ta1_isr(void)
 /* Setup TRIGGER and ECHO pins */
 void init_ultrasonic_pins(void)
 {
-  P2DIR &= ~ECHO_PIN; // Set ECHO (P1.1) pin as INPUT
-  P2SEL |= ECHO_PIN;  // Set P1.1 as CCI0A (Capture Input signal).
+  P2DIR &= ~ECHO_PIN; // Set ECHO (P2.0) pin as INPUT
+  P2SEL |= ECHO_PIN;  // Set P2.0 as CCI0A (Capture Input signal).
   P2SEL2 &= ~(ECHO_PIN);
   P2DIR |= TRIG_PIN;  // Set TRIGGER (P2.1) pin as OUTPUT
   P2OUT &= ~TRIG_PIN; // Set TRIGGER (P2.1) pin to LOW
 }
 
+// Initialize the motors
 void init_motor(void)
 {
+  // The P1.6 is used for pwm and outpu to the servo.
   P1DIR |= BIT6;
-  P1SEL |= BIT6;
+  // This clears all P1 outputs.
   P1OUT = 0;
+  // Selecting the TA0.1 option.
+  P1SEL |= BIT6;
 }
 
 void delay()
@@ -189,12 +193,15 @@ __interrupt void USCI0RX_ISR(void)
 
   if (c == 'o')
   {
+    // Set PWM period TA0.1.
     TA0CCR0 = 20000 - 1;
+    // This sets 1.5 ms as 0 degrees, servo position.
     TA0CCR1 = 1500;
 
     TA0CCTL1 = OUTMOD_7;
     TA0CTL = TASSEL_2 + MC_1;
 
+    // This block moves the motor 90 degrees to open position
     delay();
     TA0CCR1 = 1500;
     delay();
@@ -215,12 +222,15 @@ __interrupt void USCI0RX_ISR(void)
 
   if (c == 'c')
   {
+    // Set PWM period TA0.1.
     TA0CCR0 = 20000 - 1;
+    // This sets 2.5 ms as 90 degrees, servo position.
     TA0CCR1 = 2500;
 
     TA0CCTL1 = OUTMOD_7;
     TA0CTL = TASSEL_2 + MC_1;
 
+    // This block rotates the servo 90 deg to close hatch
     delay();
     TA0CCR1 = 2500;
     delay();
