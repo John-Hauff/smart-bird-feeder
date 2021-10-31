@@ -19,13 +19,13 @@ volatile int i;
 
 void print(char *text)
 {
-  unsigned int i = 0;
-  while (text[i] != '\0')
+  unsigned int j = 0;
+  while (text[j] != '\0')
   {
     while (!(IFG2 & UCA0TXIFG))
       ; // Check if TX is ongoing
-    UCA0TXBUF = text[i];
-    i++;
+    UCA0TXBUF = text[j];
+    j++;
   }
 }
 
@@ -49,8 +49,8 @@ void printNumber(unsigned long num)
 
 void wait_ms(unsigned int ms)
 {
-  unsigned int i;
-  for (i = 0; i <= ms; i++)
+  unsigned int j;
+  for (j = 0; j <= ms; j++)
   {
     __delay_cycles(1000); // 1MHz clock --> 1E3/1E6 = 1E-3 (1ms)
   }
@@ -113,8 +113,9 @@ void delay()
   volatile unsigned long i;
   i = 49999;
   do
-    (i--);
-  while (i != 0);
+  {
+    i--;
+  } while (i != 0);
 }
 
 /* Setup UART */
@@ -161,9 +162,11 @@ void reset_timer(void)
 #pragma vector = USCIAB0RX_VECTOR // UART RX Interrupt Vector
 __interrupt void USCI0RX_ISR(void)
 {
-  char c;
-  c = UCA0RXBUF;
-  if (c == 'u')
+  char UART_msg;
+  UART_msg = UCA0RXBUF;
+  unsigned int j; // loop counter
+
+  if (UART_msg == 'u')
   {
     sum = 0;
     i = 0;
@@ -191,7 +194,7 @@ __interrupt void USCI0RX_ISR(void)
     __bis_SR_register(LPM0_bits + GIE); // Enter LPM0, Enable Interrupt
   }
 
-  if (c == 'o')
+  if (UART_msg == 'o')
   {
     // Set PWM period TA0.1.
     TA0CCR0 = 20000 - 1;
@@ -201,18 +204,13 @@ __interrupt void USCI0RX_ISR(void)
     TA0CCTL1 = OUTMOD_7;
     TA0CTL = TASSEL_2 + MC_1;
 
-    // This block moves the motor 90 degrees to open position
-    delay();
-    TA0CCR1 = 1500;
-    delay();
-    // TA0CCR1 = 1750;
-    // delay();
-    TA0CCR1 = 2000;
-    delay();
-    // TA0CCR1 = 2250;
-    // delay();
-    TA0CCR1 = 2500;
-    delay();
+    // This loop moves the motor 90 degrees to open position
+    for (j = 1500; j <= 2500; j += 500)
+    {
+      delay();
+      TA0CCR1 = j;
+      delay();
+    }
 
     TA0CTL = MC_0;
 
@@ -220,7 +218,7 @@ __interrupt void USCI0RX_ISR(void)
     __bis_SR_register(LPM0_bits + GIE); // Enter LPM0, Enable Interrupt
   }
 
-  if (c == 'c')
+  if (UART_msg == 'c')
   {
     // Set PWM period TA0.1.
     TA0CCR0 = 20000 - 1;
@@ -230,18 +228,13 @@ __interrupt void USCI0RX_ISR(void)
     TA0CCTL1 = OUTMOD_7;
     TA0CTL = TASSEL_2 + MC_1;
 
-    // This block rotates the servo 90 deg to close hatch
-    delay();
-    TA0CCR1 = 2500;
-    delay();
-    // TA0CCR1 = 2250;
-    // delay();
-    TA0CCR1 = 2000;
-    delay();
-    // TA0CCR1 = 1750;
-    // delay();
-    TA0CCR1 = 1500;
-    delay();
+    // This loop rotates the servo 90 deg to close hatch
+    for (j = 2500; j >= 1500; j -= 500)
+    {
+      delay();
+      TA0CCR1 = j;
+      delay();
+    }
 
     TA0CTL = MC_0;
 
