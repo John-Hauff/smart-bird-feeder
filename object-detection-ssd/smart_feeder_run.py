@@ -141,6 +141,7 @@ def open_hatch(serial_port):
     print('opening hatch')
     open_hatch_cmd = 'o'
     # write msg to UART serial port
+    # TODO: Maybe only write to port when buffer is empty? Handle this somehow.
     serial_port.write(open_hatch_cmd.encode())
 
 
@@ -218,6 +219,25 @@ def handle_bird(net, detections, species_names, img, species_to_ignore):
                 #    net, detection, img, timestamp)
 
     return species_to_ignore
+
+
+# Function handles different data that is in the serial port buffer
+# 1. Handle low feed levels msg -> push low feed notification -> send ack msg back
+# 2. Handle non-low feed level msg -> send ack msg back (no further action reuqired)
+def handle_serial_data(data):
+    if data == 'l'.encode():
+        print("Feed is low! Sending notification")
+        # time.sleep(2)
+        # send push notification for low bird feed warning
+        title = 'Your birds are running out of food! ⚠️'
+        message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
+        send_push_message(token, title, message)
+        return
+
+    if data == 'h'.encode():
+        print("Feed is not low yet.")
+        return
+    # TODO: Add all other serial port data checks below here
 
 
 # Function that will write the current frame as a .jpg to local storage
@@ -303,6 +323,8 @@ if __name__ == '__main__':
             # check if it is time to check feed levels
             if should_check_feed_lvl(time1, time2):
                 # ask msp430 to read ultrasonic data and tell us if feed is low
+                # TODO: could try to check if buffer empty before each write op.
+                # Not fully sure if this would cause a contiguous write op to not trigger.
                 serial_port.write('u'.encode())
                 print("'u' is sent")
                 # reset waiting time for next pulse to ultrasonic
@@ -314,64 +336,61 @@ if __name__ == '__main__':
             data=""
 
             # check if UART response indicates low feed
-#            if data == 'l'.encode():
-#                # send push notification for low bird feed warning
-#                title = 'Your birds are running out of food! ⚠️'
-#                message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
-#                send_push_message(token, title, message)
+            # handle_serial_data(data)
+
                 
             # TODO: remove this non-sensor triggered block
             # check if UART response indicates low feed
             if serial_port.in_waiting > 0:
                 data = serial_port.read()
-                if data == 'l'.encode():
-                    # send push notification for low bird feed warning
-                    title = 'Your birds are running out of food! ⚠️'
-                    message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
-                    send_push_message(token, title, message)
-
+                handle_serial_data(data)
 
             # check if MSP430 wants model to perform object detection
 #                if data == 'r'.encode():
 #                    print('r received!')
+
             print('starting detection')
             # serial_port.write('a'.encode())  # ack msg
 
             # loop until serial port has stop message (received when MCU's sensor stops detecting presence)
-            while serial_port.in_waiting <= 0 or serial_port.read() != 's'.encode():
-                time2 = time.time()
-
-                # TODO: this is duplicate code. Figure out a way to refactor this.
-                # check if it is time to check feed levels
-                if should_check_feed_lvl(time1, time2):
-                    # ask msp430 to read ultrasonic data and tell us if feed is low
-                    serial_port.write('u'.encode())
-                    print("Asking if feed is low...")
-#                    time.sleep(3)
-                    # reset waiting time for next pulse to ultrasonic
-                    time1 = time.time()
-
+            while True:
+                # read serial port for stop message (received when MCU's sensor stops detecting objects)
                 if serial_port.in_waiting > 0:
                     data = serial_port.read()
-#                    print('data found! here it is', data)
-#                    time.sleep(3)
-                    # TODO: this 'l' block is not getting triggered by UART for some reason. Figure it out pls
-                    # check if UART response indicates low feed
-                    # possible solution: UART serial port in one channel, so any write or read ops will overwrite the old data waiting in the port.
-                    # To get around this, we could just check for 'l' anytime a serial port op is performed.
-                    if data == 'l'.encode():
-                        print("Feed is low! Sending notification")
-                        time.sleep(2)
-                        # send push notification for low bird feed warning
-                        title = 'Your birds are running out of food! ⚠️'
-                        message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
-                        send_push_message(token, title, message)
+                    if data == 's'.encode():
+                        # TODO: Add ack msg write here once Nikki gets it setup on MSP430
+                        break
                     else:
-                        print("Feed is not low yet. No notification sent.")
-                        time.sleep(2)                     
+                        handle_serial_data(data)
+                else:
+                    time2 = time.time()
 
-                species_to_ignore = run_obj_detection(
-                    input, output, net, opt, serial_port, species_names, species_to_ignore)
+                    # TODO: this is duplicate code. Figure out a way to refactor this.
+                    # check if it is time to check feed levels
+                    if should_check_feed_lvl(time1, time2):
+                        # ask msp430 to read ultrasonic data and tell us if feed is low
+                        serial_port.write('u'.encode())
+                        print("Asking if feed is low...")
+    #                    time.sleep(3)
+                        # reset waiting time for next pulse to ultrasonic
+                        time1 = time.time()
+
+                    if serial_port.in_waiting > 0:
+                        data = serial_port.read()
+    #                    print('data found! here it is', data)
+    #                    time.sleep(3)
+                        # TODO: this 'l' block is not getting triggered by UART for some reason. Figure it out pls
+                        # check if UART response indicates low feed
+                        # TODO: Update: this issue may be fixed. Requires further testing.
+                        # possible solution: UART serial port in one channel, so any write or read ops will overwrite the old data waiting in the port.
+                        # To get around this, we could just check for 'l' anytime a serial port op is performed.
+                        handle_serial_data(data)
+                        else:
+                            print("Feed is not low yet. No notification sent.")
+                            time.sleep(2)                     
+
+                    species_to_ignore = run_obj_detection(
+                        input, output, net, opt, serial_port, species_names, species_to_ignore)
 
     except KeyboardInterrupt:
         print("Exiting Program")
