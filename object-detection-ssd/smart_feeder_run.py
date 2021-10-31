@@ -330,9 +330,6 @@ if __name__ == '__main__':
                     message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
                     send_push_message(token, title, message)
 
-            if data == "\r".encode():
-                # For Windows boxen on the other end
-                serial_port.write("\n".encode())
 
             # check if MSP430 wants model to perform object detection
 #                if data == 'r'.encode():
