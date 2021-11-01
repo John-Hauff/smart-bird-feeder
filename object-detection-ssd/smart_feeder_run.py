@@ -177,7 +177,7 @@ def handle_bird(net, detections, species_names, img, species_to_ignore):
 
         if counter1 >= (30 * 5):
             print('counter1 is done and is {:d}'.format(counter1))  # debug
-            
+
             counter1 = 0
             # reset species to ignore to None with the current detected species
             species_to_ignore = None
@@ -333,12 +333,11 @@ if __name__ == '__main__':
 #            if serial_port.in_waiting > 0:
 #                data = serial_port.read()
 #                print(data)
-            data=""
+            data = ""
 
             # check if UART response indicates low feed
             # handle_serial_data(data)
 
-                
             # TODO: remove this non-sensor triggered block
             # check if UART response indicates low feed
             if serial_port.in_waiting > 0:
@@ -385,9 +384,9 @@ if __name__ == '__main__':
                         # possible solution: UART serial port in one channel, so any write or read ops will overwrite the old data waiting in the port.
                         # To get around this, we could just check for 'l' anytime a serial port op is performed.
                         handle_serial_data(data)
-                        else:
-                            print("Feed is not low yet. No notification sent.")
-                            time.sleep(2)                     
+                    else:
+                        print("Feed is not low yet. No notification sent.")
+                        time.sleep(2)
 
                     species_to_ignore = run_obj_detection(
                         input, output, net, opt, serial_port, species_names, species_to_ignore)
@@ -402,6 +401,3 @@ if __name__ == '__main__':
     finally:
         serial_port.close()
         pass
-
-
-
