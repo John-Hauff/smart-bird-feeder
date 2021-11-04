@@ -36,8 +36,6 @@ import sys
 from send_img import post_bird_memory
 # push notifications
 from push_notification import send_push_message
-# import emailing capabilities
-import emailer
 
 # token for Expo push notifications
 token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
@@ -49,33 +47,6 @@ counter2 = 0
 counter3 = 0
 hatch_is_closed = False
 hatch_is_open = True
-
-
-def serial_config():
-    serial_port = serial.Serial(
-        port="/dev/ttyTHS1",
-        baudrate=9600,
-        bytesize=serial.EIGHTBITS,
-        parity=serial.PARITY_NONE,
-        stopbits=serial.STOPBITS_ONE,
-    )
-    # Wait a second to let the port initialize
-    time.sleep(1)
-
-    print("Serial port is configured")
-
-    return serial_port
-
-
-# Function to update title bar of capture window
-def update_title_bar(output, title):
-    output.SetStatus(title)
-
-
-def should_check_feed_lvl(time1, time2):
-    # TODO: adjust wait time for low feed check
-    wait_time = 15  # waiting interval in seconds
-    return (time2 - time1) >= wait_time
 
 
 def run_obj_detection(input, output, net, opt, serial_port, species_names, species_to_ignore):
@@ -116,7 +87,7 @@ def run_obj_detection(input, output, net, opt, serial_port, species_names, speci
     else:
         counter2 += 1
 
-        # if squirrel was not detected for a while -> open hatch if closed and handle bird detection
+        # if hatch closed and squirrel was not detected for a while -> open hatch and handle bird detection
         if hatch_is_closed and counter2 >= (30 * 5):
             counter2 = 0
             open_hatch(serial_port)
@@ -137,25 +108,10 @@ def run_obj_detection(input, output, net, opt, serial_port, species_names, speci
     return species_to_ignore
 
 
-def open_hatch(serial_port):
-    print('opening hatch')
-    open_hatch_cmd = 'o'
-    # write msg to UART serial port
-    # TODO: Maybe only write to port when buffer is empty? Handle this somehow.
-    serial_port.write(open_hatch_cmd.encode())
-
-
-def close_hatch(serial_port):
-    print('closing hatch')
-    close_hatch_cmd = 'c'
-    # write msg to UART serial port
-    serial_port.write(close_hatch_cmd.encode())
-
-
 def is_squirrel_detected(net, detections):
     # check if a squirrel was detected in the frame
     for detection in detections:
-        if str(net.GetClassDesc(detection.ClassID)) == 'squirrel' and detection.Confidence >= .50:
+        if str(net.GetClassDesc(detection.ClassID)) == 'squirrel' and detection.Confidence >= .90:
             return True
 
 
@@ -213,17 +169,36 @@ def handle_bird(net, detections, species_names, img, species_to_ignore):
                 # send push notification for newly added bird memory
                 title = 'New Bird Memory! 🐦'
                 message = 'A new bird memory has been captured!\nView it in your bird memories gallery.'
-                send_push_message(token, title, message)
-                time.sleep(4)
-                # emailer.send_bird_memory(
-                #    net, detection, img, timestamp)
+#                send_push_message(token, title, message)
+                print('bird detected!')
+                time.sleep(2)
 
     return species_to_ignore
+
+def should_check_feed_lvl(time1, time2):
+    # TODO: adjust wait time for low feed check
+    wait_time = 15  # waiting interval in seconds
+    return (time2 - time1) >= wait_time
+
+
+def open_hatch(serial_port):
+    print('opening hatch')
+    open_hatch_cmd = 'o'
+    # write msg to UART serial port
+    # TODO: Maybe only write to port when buffer is empty? Handle this somehow.
+    serial_port.write(open_hatch_cmd.encode())
+
+
+def close_hatch(serial_port):
+    print('closing hatch')
+    close_hatch_cmd = 'c'
+    # write msg to UART serial port
+    serial_port.write(close_hatch_cmd.encode())
 
 
 # Function handles different data that is in the serial port buffer
 # 1. Handle low feed levels msg -> push low feed notification -> send ack msg back
-# 2. Handle non-low feed level msg -> send ack msg back (no further action reuqired)
+# 2. Handle non-low feed level msg -> send ack msg back (no further action required)
 def handle_serial_data(data):
     if data == 'l'.encode():
         print("Feed is low! Sending notification")
@@ -231,19 +206,40 @@ def handle_serial_data(data):
         # send push notification for low bird feed warning
         title = 'Your birds are running out of food! ⚠️'
         message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
-        send_push_message(token, title, message)
+#        send_push_message(token, title, message)
         return
 
     if data == 'h'.encode():
         print("Feed is not low yet.")
         return
-    # TODO: Add all other serial port data checks below here
+    # TODO: Add all other serial port data checks below here (if any)
 
 
 # Function that will write the current frame as a .jpg to local storage
 def save_img(img, timestamp):
     cv2.imwrite("captured-bird-images/" + str('bird_memory' + ".jpeg"),
                 cv2.cvtColor(np.array(img), cv2.COLOR_BGR2RGB))
+
+
+def serial_config():
+    serial_port = serial.Serial(
+        port="/dev/ttyTHS1",
+        baudrate=9600,
+        bytesize=serial.EIGHTBITS,
+        parity=serial.PARITY_NONE,
+        stopbits=serial.STOPBITS_ONE,
+    )
+    # Wait a second to let the port initialize
+    time.sleep(1)
+
+    print("Serial port is configured")
+
+    return serial_port
+
+
+# Function to update title bar of capture window
+def update_title_bar(output, title):
+    output.SetStatus(title)
 
 
 if __name__ == '__main__':
@@ -384,9 +380,6 @@ if __name__ == '__main__':
                         # possible solution: UART serial port in one channel, so any write or read ops will overwrite the old data waiting in the port.
                         # To get around this, we could just check for 'l' anytime a serial port op is performed.
                         handle_serial_data(data)
-                    else:
-                        print("Feed is not low yet. No notification sent.")
-                        time.sleep(2)
 
                     species_to_ignore = run_obj_detection(
                         input, output, net, opt, serial_port, species_names, species_to_ignore)
