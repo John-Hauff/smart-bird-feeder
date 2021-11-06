@@ -112,7 +112,6 @@ def is_squirrel_detected(net, detections):
 
 
 def handle_squirrel(serial_port):
-    print('Start of handle_squirrel')
     global hatch_is_open
     
     if hatch_is_open:
