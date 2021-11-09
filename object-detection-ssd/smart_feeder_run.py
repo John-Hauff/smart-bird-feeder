@@ -291,6 +291,7 @@ if __name__ == '__main__':
         'common-grackle': 'common grackle',
         'downy-woodpecker': 'downy woodpecker',
         'gray-catbird': 'gray catbird',
+        'green-cheeked-parakeet': 'green-cheeked parakeet',
         'mourning-dove': 'mourning dove',
         'cardinal': 'northern cardinal',
         'northern-mockingbird': 'northern mockingbird',
