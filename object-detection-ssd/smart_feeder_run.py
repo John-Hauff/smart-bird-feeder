@@ -353,45 +353,43 @@ if __name__ == '__main__':
                 handle_serial_data(data)
 
             # check if MSP430 wants model to perform object detection
-            # TODO: Indent everything after this if statement when IR detection trigger is added
-#                if data == 'r'.encode():
-#                    print('r received!')
-
-            print(
-                'Starting loop for object detection... (Low feed asking & checking is still performed here).')
-
-            # loop until serial port has stop message (received when MCU's sensor stops detecting presence)
-            while True:
-                # read serial port for stop message (received when MCU's sensor stops detecting objects)
-                if serial_port.in_waiting > 0:
-                    print('Data found in serial port in check #5')  # debug
-                    data = serial_port.read()
-                    if data == 's'.encode():
-                        print(
-                            'Stop message received. Stopping object detection loop...')
-                        # TODO: Add ack msg write here once Nikki gets it setup on MSP430
-                        break
-                    else:
-                        handle_serial_data(data)
-                else:
-                    time2 = time.time()
-
-                    # TODO: this is duplicate code. Figure out a way to refactor this.
-                    # check if it is time to check feed levels
-                    if should_check_feed_lvl(time1, time2):
-                        if serial_port.in_waiting > 0:
-                            # debug
-                            print('Data found in serial port in check #6')
-                            data = serial_port.read()
+            # start detection cycle if 'r' start msg is received
+            if data == 'r'.encode():
+                print("'r' recevied! Starting detection cycle...")
+                # loop until serial port has stop message (received when MCU's sensor stops detecting presence)
+                while True:
+                    # read serial port for stop message (received when MCU's sensor stops detecting objects)
+                    if serial_port.in_waiting > 0:
+                        print('Data found in serial port in check #5')  # debug
+                        data = serial_port.read()
+                        if data == 's'.encode():
+                            print(
+                                'Stop message received. Stopping object detection loop...')
+                            # TODO: Add ack msg write here once Nikki gets it setup on MSP430
+                            break
+                        else:
                             handle_serial_data(data)
-                        # ask msp430 to read ultrasonic data and tell us if feed is low
-                        serial_port.write('u'.encode())
-                        print("'u' is sent #3")
-                        # reset waiting time for next pulse to ultrasonic
-                        time1 = time.time()
+                    else:
+                        time2 = time.time()
 
-                    species_to_ignore = run_obj_detection(
-                        input, output, net, opt, serial_port, species_names, species_to_ignore)
+                        # TODO: this is duplicate code. Figure out a way to refactor this.
+                        # check if it is time to check feed levels
+                        if should_check_feed_lvl(time1, time2):
+                            if serial_port.in_waiting > 0:
+                                # debug
+                                print('Data found in serial port in check #6')
+                                data = serial_port.read()
+                                handle_serial_data(data)
+                            # ask msp430 to read ultrasonic data and tell us if feed is low
+                            serial_port.write('u'.encode())
+                            print("'u' is sent #3")
+                            # reset waiting time for next pulse to ultrasonic
+                            time1 = time.time()
+
+                        species_to_ignore = run_obj_detection(
+                            input, output, net, opt, serial_port, species_names, species_to_ignore)
+            else:
+                handle_serial_data(data)
 
     except KeyboardInterrupt:
         print("Exiting Program")
