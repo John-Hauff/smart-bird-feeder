@@ -393,7 +393,9 @@ if __name__ == '__main__':
                             
                     detection_cycle_counter += 1
             
-            else:
+            elif serial_port.in_waiting > 0:
+                print('Data found in serial port check #9!')
+                data = serial_port.read()
                 handle_serial_data(data)
             
             # tell the MSP430 that detection is not running
