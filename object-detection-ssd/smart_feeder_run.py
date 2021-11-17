@@ -352,12 +352,14 @@ if __name__ == '__main__':
                 data = serial_port.read()
                 handle_serial_data(data)
 
+            detection_cycle_counter = 0
+
             # check if MSP430 wants model to perform object detection
             # start detection cycle if 'r' start msg is received
             if data == 'r'.encode():
                 print("'r' recevied! Starting detection cycle...")
-                # loop until serial port has stop message (received when MCU's sensor stops detecting presence)
-                while True:
+                # loop for a number of cycles/frames, then stop detection cyce to save resources
+                while detection_cycle_counter < (30 * 8):
                     # read serial port for stop message (received when MCU's sensor stops detecting objects)
                     if serial_port.in_waiting > 0:
                         print('Data found in serial port in check #5')  # debug
@@ -388,9 +390,20 @@ if __name__ == '__main__':
 
                         species_to_ignore = run_obj_detection(
                             input, output, net, opt, serial_port, species_names, species_to_ignore)
+                            
+                    detection_cycle_counter += 1
+            
             else:
                 handle_serial_data(data)
-
+            
+            # tell the MSP430 that detection is not running
+            # make sure to check for data in serial port before writing to it
+            if serial_port.in_waiting > 0:
+                print('Data found in serial port in check #8')  # debug
+                data = serial_port.read()
+                handle_serial_data(data)
+            serial_port.write('s'.encode())
+            
     except KeyboardInterrupt:
         print("Exiting Program")
 
