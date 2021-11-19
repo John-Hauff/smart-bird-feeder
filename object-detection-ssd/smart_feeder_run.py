@@ -45,6 +45,10 @@ counter1 = 0
 counter2 = 0
 # counter3 for waiting some time before saving a captured bird img so that bird has time to settle for a good shot
 counter3 = 0
+# detection_cycle_counter for running detection while below a certain value
+# whenever new detection is made, detection_cycle_counter resets so detection can continue regardless
+# of command given by MSP430 laser sensor
+detection_cycle_counter = 0
 hatch_is_open = True
 
 
@@ -105,8 +109,10 @@ def run_obj_detection(input, output, net, opt, serial_port, species_names, speci
 
 
 def is_squirrel_detected(net, detections):
+    global detection_cycle_counter
     # check if a squirrel was detected in the frame
     for detection in detections:
+        detection_cycle_counter = 0
         if str(net.GetClassDesc(detection.ClassID)) == 'squirrel' and detection.Confidence >= .90:
             return True
 
@@ -164,9 +170,9 @@ def handle_bird(net, detections, species_names, img, species_to_ignore):
                 # post saved bird memory with formatted species name
 #                post_bird_memory(species_names[species_label])
                 # send push notification for newly added bird memory
-                title = 'New Bird Memory! 🐦'
+                title = 'New {:s} bird memory! 🐦'.format(species_names[species_label])
                 message = 'A new bird memory has been captured!\nView it in your bird memories gallery.'
-#                send_push_message(token, title, message)
+                send_push_message(token, title, message)
 
     return species_to_ignore
 
@@ -352,14 +358,13 @@ if __name__ == '__main__':
                 data = serial_port.read()
                 handle_serial_data(data)
 
-            detection_cycle_counter = 0
-
             # check if MSP430 wants model to perform object detection
             # start detection cycle if 'r' start msg is received
             if data == 'r'.encode():
                 print("'r' recevied! Starting detection cycle...")
                 # loop for a number of cycles/frames, then stop detection cyce to save resources
                 while detection_cycle_counter < (30 * 8):
+                    print('detection_cycles_cntr is {:d}'.format(detection_cycle_counter))
                     # read serial port for stop message (received when MCU's sensor stops detecting objects)
                     if serial_port.in_waiting > 0:
                         print('Data found in serial port in check #5')  # debug
@@ -392,7 +397,9 @@ if __name__ == '__main__':
                             input, output, net, opt, serial_port, species_names, species_to_ignore)
                             
                     detection_cycle_counter += 1
-            
+                print('detection loop has ended')
+                detection_cycle_counter = 0
+                time.sleep(2)
             elif serial_port.in_waiting > 0:
                 print('Data found in serial port check #9!')
                 data = serial_port.read()
