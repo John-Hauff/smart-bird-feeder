@@ -16,6 +16,7 @@ volatile unsigned long distance;
 volatile unsigned long sum;
 char ch;
 volatile int i;
+unsigned int ADC_value=0;
 
 void print(char *text)
 {
@@ -53,6 +54,13 @@ void wait_ms(unsigned int ms)
   {
     __delay_cycles(1000);             //1MHz clock --> 1E3/1E6 = 1E-3 (1ms)
   }
+}
+
+void ConfigureAdc(void)
+{
+    ADC10CTL1 = INCH_3 + ADC10DIV_3;
+    ADC10CTL0 = SREF_0 + ADC10SHT_3 + ADC10ON + ADC10IE;
+    ADC10AE0 |= BIT3;
 }
 
 #if defined(__TI_COMPILER_VERSION__)
@@ -124,6 +132,18 @@ void init_uart(void)
   IE2 |= UCA0RXIE;                    // Enable RX interrupt
 }
 
+void init_adc(void)
+{
+    P1SEL |= BIT3;                    // ADC Input
+}
+
+void init_speaker(void)
+{
+    P2DIR |= BIT2;
+    P2SEL |= BIT2;
+    P2OUT |= 0;
+}
+
 void init_timer(void)
 {
   // 1MHz Clock
@@ -151,11 +171,19 @@ void reset_timer(void)
   TA1CTL |= TACLR;                      //Clear timer
 }
 
+// ADC10 interrupt service routine
+#pragma vector=ADC10_VECTOR
+__interrupt void ADC10_ISR (void)
+{
+    __bic_SR_register_on_exit(CPUOFF);        // Return to active mode; BIC mask, saved_SR
+}
+
 #pragma vector=USCIAB0RX_VECTOR         // UART RX Interrupt Vector
 __interrupt void USCI0RX_ISR(void)
 {
   char c;
   c = UCA0RXBUF;
+
   if(c == 'u'){
     sum = 0;
     i = 0;
@@ -177,7 +205,7 @@ __interrupt void USCI0RX_ISR(void)
     }
 
     IFG2 &= ~(UCA0RXIFG);                  // Clear Receiver flag
-    __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
+   // __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
   }
 
   if(c == 'o'){
@@ -202,11 +230,12 @@ __interrupt void USCI0RX_ISR(void)
     TA0CTL = MC_0;
 
     IFG2 &= ~(UCA0RXIFG);                  // Clear Receiver flag
-    __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
+    // __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
 
   }
 
   if(c == 'c'){
+    //Start of motor code
     TA0CCR0 = 20000-1;
     TA0CCR1 = 2500;
 
@@ -227,8 +256,10 @@ __interrupt void USCI0RX_ISR(void)
 
     TA0CTL = MC_0;
 
+    init_timer();
+
     IFG2 &= ~(UCA0RXIFG);                  // Clear Receiver flag
-    __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
+    // __bis_SR_register(LPM0_bits + GIE);    // Enter LPM0, Enable Interrupt
   }
 }
 
@@ -236,7 +267,7 @@ void main(void)
 {
   WDTCTL = WDTPW + WDTHOLD;             // Stop Watch Dog Timer
 
-  if (CALBC1_1MHZ==0xFF)                // Check if calibration constant erased
+  if (CALBC1_1MHZ == 0xFF)                // Check if calibration constant erased
   {
       while(1);                         // do not load program
   }
@@ -248,6 +279,32 @@ void main(void)
   init_uart();
   init_timer();
   init_motor();
+  init_speaker();
 
-  __bis_SR_register(LPM0_bits + GIE);   // Enter LPM0, Enable Interrupt
+  //ADC Code
+  init_adc();
+
+  // ADC Code
+  ConfigureAdc();
+
+  // ADC Code
+  BCSCTL2 &= ~(DIVS_3);
+
+  __enable_interrupt();                 // enable global interrupt
+
+  // Loop for trip-wire
+  while(1)
+  {
+    wait_ms(3000);                      // wait every 1s to check voltage
+    ADC10CTL0 |= ENC + ADC10SC;         // sampling and conversion; enable and start conversion
+    __bis_SR_register(CPUOFF + GIE);    // enter LPM mode; exits when ADC10_ISR is triggered
+    ADC_value = ADC10MEM;               // ADC10MEM = ADC10 Memory
+   // printNumber(ADC_value);
+    if(ADC_value > 200)
+    {
+        print("r");
+    }
+  }
+  // __bis_SR_register(LPM0_bits + GIE);   // Enter LPM0, Enable Interrupt
 }
+
