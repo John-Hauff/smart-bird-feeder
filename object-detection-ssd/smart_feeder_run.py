@@ -113,7 +113,7 @@ def is_squirrel_detected(net, detections):
     # check if a squirrel was detected in the frame
     for detection in detections:
         detection_cycle_counter = 0
-        if str(net.GetClassDesc(detection.ClassID)) == 'squirrel' and detection.Confidence >= .70:
+        if str(net.GetClassDesc(detection.ClassID)) == 'squirrel' and detection.Confidence >= .90:
             return True
 
 
@@ -160,7 +160,7 @@ def handle_bird(net, detections, species_names, img, species_to_ignore):
             # without being interrupted by detections of other species, this block will only execute when counter1 peaks
             # and the ignored species is reset, making counter3 temporarily useless.
             # TODO: fix up counter3 implementation. It's not perfect. Will counter3 reset if a new species is detected before counter3 peaks?
-            if counter3 >= (30 * 1.5):
+            if counter3 >= (30 * .5):
                 print('counter3 has reached {:d}. Now resetting counter3 and saving detected bird img'.format(
                     counter3))
                 counter3 = 0
@@ -180,7 +180,7 @@ def handle_bird(net, detections, species_names, img, species_to_ignore):
 
 def should_check_feed_lvl(time1, time2):
     # TODO: adjust wait time for low feed check
-    wait_time = 22  # waiting interval in seconds
+    wait_time = 30  # waiting interval in seconds
     return (time2 - time1) >= wait_time
 
 
@@ -372,7 +372,7 @@ if __name__ == '__main__':
             # start detection cycle if 'r' start msg is received
             if data == 'r'.encode():
 #            if True:
-                print("'r' recevied! Starting detection cycle...")
+                print("'r' received! Starting detection cycle...")
                 # loop for a number of cycles/frames, then stop detection cyce to save resources
                 while detection_cycle_counter < (30 * 8):
 #                while True:
@@ -381,13 +381,7 @@ if __name__ == '__main__':
                     if serial_port.in_waiting > 0:
 #                        print('Data found in serial port in check #5')  # debug
                         data = serial_port.read()
-                        if data == 's'.encode():
-                            print(
-                                'Stop message received. Stopping object detection loop...')
-                            # TODO: Add ack msg write here once Nikki gets it setup on MSP430
-                            break
-                        else:
-                            handle_serial_data(data)
+                        handle_serial_data(data)
                     else:
                         time2 = time.time()
 
@@ -411,7 +405,7 @@ if __name__ == '__main__':
                     detection_cycle_counter += 1
                 print('detection loop has ended')
                 detection_cycle_counter = 0
-                time.sleep(2)
+                time.sleep(1)
             elif serial_port.in_waiting > 0:
 ##                print('Data found in serial port check #9!')
                 data = serial_port.read()
