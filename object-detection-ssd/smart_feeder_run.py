@@ -134,8 +134,8 @@ def handle_bird(net, detections, species_names, img, species_to_ignore):
         species_label = str(net.GetClassDesc(detection.ClassID))
 
         if counter1 >= (30 * 5):
-            print('counter1 has reached {:d}. Now resetting counter1 and species_to_ignore'.format(
-                counter1))
+#            print('counter1 has reached {:d}. Now resetting counter1 and species_to_ignore'.format(
+#                counter1))
             counter1 = 0
             # reset species to ignore to None with the current detected species
             species_to_ignore = None
@@ -145,7 +145,7 @@ def handle_bird(net, detections, species_names, img, species_to_ignore):
 
         if detection.Confidence >= 0.90 and species_to_ignore != species_label:
             #            print(detection)
-            print('Processing species:', species_label)  # debug
+#            print('Processing species:', species_label)  # debug
 
             # reassign species to ignore with the current detected species
             species_to_ignore = species_label
@@ -161,8 +161,7 @@ def handle_bird(net, detections, species_names, img, species_to_ignore):
             # and the ignored species is reset, making counter3 temporarily useless.
             # TODO: fix up counter3 implementation. It's not perfect. Will counter3 reset if a new species is detected before counter3 peaks?
             if counter3 >= (30 * .5):
-                print('counter3 has reached {:d}. Now resetting counter3 and saving detected bird img'.format(
-                    counter3))
+#                print('counter3 has reached {:d}. Now resetting counter3 and saving detected bird img'.format(counter3))
                 counter3 = 0
                 # TODO: maybe use this time stamp for memory creation time instead of mongoose Date object...
                 timestamp = str(time.time())
@@ -185,7 +184,7 @@ def should_check_feed_lvl(time1, time2):
 
 
 def open_hatch(serial_port):
-    print('Start of open_hatch function')
+#    print('Start of open_hatch function')
     open_hatch_cmd = 'o'
     # write msg to UART serial port
     if serial_port.in_waiting > 0:
@@ -193,19 +192,19 @@ def open_hatch(serial_port):
         data = serial_port.read()
         handle_serial_data(data)
     serial_port.write(open_hatch_cmd.encode())
-    print('Hatch open command sent to MSP430')
+#    print('Hatch open command sent to MSP430')
 
 
 def close_hatch(serial_port):
-    print('Start of close_hatch function')
+#    print('Start of close_hatch function')
     close_hatch_cmd = 'c'
     if serial_port.in_waiting > 0:
-        print('Data found in serial port in check #2')  # debug
+#        print('Data found in serial port in check #2')  # debug
         data = serial_port.read()
         handle_serial_data(data)
     # write msg to UART serial port
     serial_port.write(close_hatch_cmd.encode())
-    print('Hatch close command sent to MSP430')
+#    print('Hatch close command sent to MSP430')
 
 
 # Function handles different data that is in the serial port buffer
@@ -213,7 +212,7 @@ def close_hatch(serial_port):
 # 2. Handle non-low feed level msg -> send ack msg back (no further action required)
 def handle_serial_data(data):
     if data == 'l'.encode():
-        print("Feed is low! Sending notification")
+#        print("Feed is low! Sending notification")
         # send push notification for low bird feed warning
         title = 'Your birds are running out of food! ⚠️'
         message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
@@ -222,7 +221,7 @@ def handle_serial_data(data):
         return
 
     if data == 'h'.encode():
-        print("Feed is not low yet. No notification sent")
+#        print("Feed is not low yet. No notification sent")
         return
     # TODO: Add all other serial port data checks below here (if any)
 
@@ -317,7 +316,7 @@ if __name__ == '__main__':
     # This keeps track of what the last bird detected was.
     species_to_ignore = None
 
-    print('Performing initial hatch open process')
+#    print('Performing initial hatch open process')
     # initially, open the feed door, set hatch opened flag
     open_hatch(serial_port)
     hatch_is_open = True
@@ -332,7 +331,7 @@ if __name__ == '__main__':
             send_push_message(token, title, message)
         
         if serial_port.in_waiting > 0:
-            print('Data found in serial port in check #7')  # debug
+#            print('Data found in serial port in check #7')  # debug
             data = serial_port.read()
             handle_serial_data(data)
         # ask msp430 to read ultrasonic data and tell us if feed is low
@@ -372,7 +371,7 @@ if __name__ == '__main__':
             # start detection cycle if 'r' start msg is received
             if data == 'r'.encode():
 #            if True:
-                print("'r' received! Starting detection cycle...")
+#                print("'r' received! Starting detection cycle...")
                 # loop for a number of cycles/frames, then stop detection cyce to save resources
                 while detection_cycle_counter < (30 * 8):
 #                while True:
@@ -403,7 +402,7 @@ if __name__ == '__main__':
                             input, output, net, opt, serial_port, species_names, species_to_ignore)
                             
                     detection_cycle_counter += 1
-                print('detection loop has ended')
+#                print('detection loop has ended')
                 detection_cycle_counter = 0
                 time.sleep(1)
             elif serial_port.in_waiting > 0:
