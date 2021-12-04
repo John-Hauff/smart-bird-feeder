@@ -37,16 +37,19 @@ from send_img import post_bird_memory
 # push notifications
 from push_notification import send_push_message
 
-# token for Expo push notifications
-token = 'ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]'
+# tokens for Expo push notifications
+tokens = ['ExponentPushToken[QdzwK-NUMCWMaVSyKnb8BC]', 'ExponentPushToken[dWndBpE2r1VD2cmkuzzdvV]']
 # counter1 for counting interval to ignore a species for
 counter1 = 0
 # counter2 for waiting some frames after a squirrel is gone before opening hatch again
 counter2 = 0
-# counter3 for waiting some time before saving a captured bird img so that bird has time to settle for a good shot
-counter3 = 0
+# detection_cycle_counter for running detection while below a certain value
+# whenever new detection is made, detection_cycle_counter resets so detection can continue regardless
+# of command given by MSP430 laser sensor
+detection_cycle_counter = 0
 hatch_is_open = True
-
+# Have a flag to tell if a new species has been detected, this way we can ignore it the first time it's seen
+species_is_novel = True
 
 def run_obj_detection(input, output, net, opt, serial_port, species_names, species_to_ignore):
     global hatch_is_open, counter2
@@ -105,15 +108,17 @@ def run_obj_detection(input, output, net, opt, serial_port, species_names, speci
 
 
 def is_squirrel_detected(net, detections):
+    global detection_cycle_counter
     # check if a squirrel was detected in the frame
     for detection in detections:
+        detection_cycle_counter = 0
         if str(net.GetClassDesc(detection.ClassID)) == 'squirrel' and detection.Confidence >= .90:
             return True
 
 
 def handle_squirrel(serial_port):
     global hatch_is_open
-    
+
     if hatch_is_open:
         # closing hatch also causes the alarm to start sounding until hatch is opened again
         close_hatch(serial_port)
@@ -121,52 +126,49 @@ def handle_squirrel(serial_port):
 
 
 def handle_bird(net, detections, species_names, img, species_to_ignore):
-    global counter1, counter3
+    global counter1, species_is_novel
 
     # this loop works only when an object (or objects) is detected
     for detection in detections:
         species_label = str(net.GetClassDesc(detection.ClassID))
 
-        if counter1 >= (30 * 5):
-            print('counter1 has reached {:d}. Now resetting counter1 and species_to_ignore'.format(counter1))
-            counter1 = 0
-            # reset species to ignore to None with the current detected species
-            species_to_ignore = None
-        else:
-            counter1 += 1
-            counter3 += 1
-
-        if detection.Confidence >= 0.90 and species_to_ignore != species_label:
-#            print(detection)
-            print('Processing species:', species_label)  # debug
+        if detection.Confidence >= 0.90 and species_to_ignore != species_label and not species_is_novel:
+            #            print(detection)
+#            print('Processing species:', species_label)  # debug
 
             # reassign species to ignore with the current detected species
             species_to_ignore = species_label
+            
             # reset counter1 so full time is waited before repeating capture of ignored species
             counter1 = 0
-
+            
+            # this is a new species, so acknowledge this so it can be ingored for a while
+            species_is_novel = True
+            
             ## handle confidently detected bird ##
-            # save capturedAt time (may not use)
-            # Wait some time before saving bird img for non-ignored species
-            # to allow time for bird to settle and prevent blurry saved imgs.
-            # After the first img of a newly detected species is saved, if the same species is repeatedly detected,
-            # without being interrupted by detections of other species, this block will only execute when counter1 peaks
-            # and the ignored species is reset, making counter3 temporarily useless.
-            # TODO: fix up counter3 implementation. It's not perfect. Will counter3 reset if a new species is detected before counter3 peaks?
-            if counter3 >= (30 * 3):
-                print('counter3 has reached {:d}. Now resetting counter3 and saving detected bird img'.format(counter3))
-                counter3 = 0
-                # TODO: maybe use this time stamp for memory creation time instead of mongoose Date object...
-                timestamp = str(time.time())
-#                save_img(img, timestamp)
-                # post saved bird memory with formatted species name
-#                post_bird_memory(species_names[species_label])
-                # send push notification for newly added bird memory
-                title = 'New Bird Memory! 🐦'
-                message = 'A new bird memory has been captured!\nView it in your bird memories gallery.'
-#                send_push_message(token, title, message)
-
+            timestamp = str(time.time())
+            save_img(img, timestamp)
+            # post saved bird memory with formatted species name
+            post_bird_memory(species_names[species_label])
+            # send push notification for newly added bird memory
+            title = 'A {:s} is at your feeder! 🐦'.format(species_names[species_label])
+            message = 'A new bird memory has been captured!\nView it in your bird memories gallery.'
+            for token in tokens:
+                send_push_message(token, title, message)
+            
+        
+        if counter1 >= (30 * 2.5):
+#            print('counter1 has reached {:d}. Now resetting counter1 and species_to_ignore'.format(
+#                counter1))
+            counter1 = 0
+            # reset species to ignore to None with the current detected species
+            species_to_ignore = None
+            species_is_novel = False
+        else:
+            counter1 += 1
+            
     return species_to_ignore
+
 
 def should_check_feed_lvl(time1, time2):
     # TODO: adjust wait time for low feed check
@@ -175,28 +177,27 @@ def should_check_feed_lvl(time1, time2):
 
 
 def open_hatch(serial_port):
-    print('Start of open_hatch function')
+#    print('Start of open_hatch function')
     open_hatch_cmd = 'o'
     # write msg to UART serial port
     if serial_port.in_waiting > 0:
-        print('Data found in serial port in check #1') # debug
+#        print('Data found in serial port in check #1')  # debug
         data = serial_port.read()
         handle_serial_data(data)
     serial_port.write(open_hatch_cmd.encode())
-    print('Hatch open command sent to MSP430')
+#    print('Hatch open command sent to MSP430')
 
 
 def close_hatch(serial_port):
-    print('Start of close_hatch function')
+#    print('Start of close_hatch function')
     close_hatch_cmd = 'c'
     if serial_port.in_waiting > 0:
-        print('Data found in serial port in check #2') # debug
+#        print('Data found in serial port in check #2')  # debug
         data = serial_port.read()
         handle_serial_data(data)
     # write msg to UART serial port
     serial_port.write(close_hatch_cmd.encode())
-    print('Hatch close command sent to MSP430')
-    
+#    print('Hatch close command sent to MSP430')
 
 
 # Function handles different data that is in the serial port buffer
@@ -204,15 +205,16 @@ def close_hatch(serial_port):
 # 2. Handle non-low feed level msg -> send ack msg back (no further action required)
 def handle_serial_data(data):
     if data == 'l'.encode():
-        print("Feed is low! Sending notification")
+#        print("Feed is low! Sending notification")
         # send push notification for low bird feed warning
         title = 'Your birds are running out of food! ⚠️'
         message = "Your smart bird feeder is running low on bird feed.\nMake sure to refill it soon!"
-        send_push_message(token, title, message)
+        for token in tokens:
+            send_push_message(token, title, message)
         return
 
     if data == 'h'.encode():
-        print("Feed is not low yet. No notification sent")
+#        print("Feed is not low yet. No notification sent")
         return
     # TODO: Add all other serial port data checks below here (if any)
 
@@ -291,6 +293,7 @@ if __name__ == '__main__':
         'common-grackle': 'common grackle',
         'downy-woodpecker': 'downy woodpecker',
         'gray-catbird': 'gray catbird',
+        'green-cheeked-parakeet': 'green-cheeked parakeet',
         'mourning-dove': 'mourning dove',
         'cardinal': 'northern cardinal',
         'northern-mockingbird': 'northern mockingbird',
@@ -306,12 +309,28 @@ if __name__ == '__main__':
     # This keeps track of what the last bird detected was.
     species_to_ignore = None
 
-    print('Performing initial hatch open process')
+#    print('Performing initial hatch open process')
     # initially, open the feed door, set hatch opened flag
     open_hatch(serial_port)
     hatch_is_open = True
 
     try:
+        # wait for WIFI connection to establish
+        time.sleep(2.5)
+        # send push notification to tell user that the feeder has powered on
+        title = 'The Smart Bird Feeder is now online! 🔋'
+        message = "Your smart bird feeder is now powered on and ready for use!"
+        for token in tokens:
+            send_push_message(token, title, message)
+        
+        if serial_port.in_waiting > 0:
+#            print('Data found in serial port in check #7')  # debug
+            data = serial_port.read()
+            handle_serial_data(data)
+        # ask msp430 to read ultrasonic data and tell us if feed is low
+        serial_port.write('u'.encode())
+#        print("'u' is sent #1")
+
         # capture initial time to track when the ultrasonic sensor should next be pulsed
         time1 = time.time()
 
@@ -322,13 +341,13 @@ if __name__ == '__main__':
 
             # check if it is time to check feed levels
             if should_check_feed_lvl(time1, time2):
-                # ask msp430 to read ultrasonic data and tell us if feed is low
                 if serial_port.in_waiting > 0:
-                    print('Data found in serial port in check #3') # debug
+#                    print('Data found in serial port in check #3')  # debug
                     data = serial_port.read()
                     handle_serial_data(data)
+                # ask msp430 to read ultrasonic data and tell us if feed is low
                 serial_port.write('u'.encode())
-                print("'u' is sent #1")
+#                print("'u' is sent #2")
                 # reset waiting time for next pulse to ultrasonic
                 time1 = time.time()
 
@@ -337,48 +356,61 @@ if __name__ == '__main__':
 
             # TODO: ensure that this block executes
             if serial_port.in_waiting > 0:
-                print('Data found in serial port in check #4') # debug
+#                print('Data found in serial port in check #4')  # debug
                 data = serial_port.read()
                 handle_serial_data(data)
 
             # check if MSP430 wants model to perform object detection
-            # TODO: Indent everything after this if statement when IR detection trigger is added
-#                if data == 'r'.encode():
-#                    print('r received!')
-
-            print('Starting loop for object detection... (Low feed asking & checking is still performed here).')
-
-            # loop until serial port has stop message (received when MCU's sensor stops detecting presence)
-            while True:
-                # read serial port for stop message (received when MCU's sensor stops detecting objects)
-                if serial_port.in_waiting > 0:
-                    print('Data found in serial port in check #5') # debug
-                    data = serial_port.read()
-                    if data == 's'.encode():
-                        print('Stop message received. Stopping object detection loop...')
-                        # TODO: Add ack msg write here once Nikki gets it setup on MSP430
-                        break
-                    else:
+            # start detection cycle if 'r' start msg is received
+            if data == 'r'.encode():
+#            if True:
+#                print("'r' received! Starting detection cycle...")
+                # loop for a number of cycles/frames, then stop detection cyce to save resources
+                while detection_cycle_counter < (30 * 8):
+#                while True:
+#                    print('detection_cycles_cntr is {:d}'.format(detection_cycle_counter))
+                    # read serial port for stop message (received when MCU's sensor stops detecting objects)
+                    if serial_port.in_waiting > 0:
+#                        print('Data found in serial port in check #5')  # debug
+                        data = serial_port.read()
                         handle_serial_data(data)
-                else:
-                    time2 = time.time()
+                    else:
+                        time2 = time.time()
 
-                    # TODO: this is duplicate code. Figure out a way to refactor this.
-                    # check if it is time to check feed levels
-                    if should_check_feed_lvl(time1, time2):
-                        if serial_port.in_waiting > 0:
-                            print('Data found in serial port in check #6') # debug
-                            data = serial_port.read()
-                            handle_serial_data(data)
-                        # ask msp430 to read ultrasonic data and tell us if feed is low
-                        serial_port.write('u'.encode())
-                        print("'u' is sent #2")
-                        # reset waiting time for next pulse to ultrasonic
-                        time1 = time.time()
+                        # TODO: this is duplicate code. Figure out a way to refactor this.
+                        # check if it is time to check feed levels
+                        if should_check_feed_lvl(time1, time2):
+                            if serial_port.in_waiting > 0:
+                                # debug
+#                                print('Data found in serial port in check #6')
+                                data = serial_port.read()
+                                handle_serial_data(data)
+                            # ask msp430 to read ultrasonic data and tell us if feed is low
+                            serial_port.write('u'.encode())
+#                            print("'u' is sent")
+                            # reset waiting time for next pulse to ultrasonic
+                            time1 = time.time()
 
-                    species_to_ignore = run_obj_detection(
-                        input, output, net, opt, serial_port, species_names, species_to_ignore)
-
+                        species_to_ignore = run_obj_detection(
+                            input, output, net, opt, serial_port, species_names, species_to_ignore)
+                            
+                    detection_cycle_counter += 1
+#                print('detection loop has ended')
+                detection_cycle_counter = 0
+                time.sleep(1)
+            elif serial_port.in_waiting > 0:
+##                print('Data found in serial port check #9!')
+                data = serial_port.read()
+                handle_serial_data(data)
+            
+            # tell the MSP430 that detection is not running
+            # make sure to check for data in serial port before writing to it
+            if serial_port.in_waiting > 0:
+#                print('Data found in serial port in check #8')  # debug
+                data = serial_port.read()
+                handle_serial_data(data)
+            serial_port.write('s'.encode())
+            
     except KeyboardInterrupt:
         print("Exiting Program")
 

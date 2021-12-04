@@ -7,9 +7,7 @@ from exponent_server_sdk import (
 )
 from requests.exceptions import ConnectionError, HTTPError
 import rollbar
-
-# Basic arguments. You should extend this function with the push features you
-# want to use, or simply pass in a `PushMessage` object.
+import time
 
 
 def send_push_message(token, title, message, extra=None):
@@ -24,6 +22,7 @@ def send_push_message(token, title, message, extra=None):
                         ))
         # print(response)
     except PushServerError as exc:
+        print('exception PushServerError')
         # Encountered some likely formatting/validation error.
         rollbar.report_exc_info(
             extra_data={
@@ -35,6 +34,9 @@ def send_push_message(token, title, message, extra=None):
             })
         raise
     except (ConnectionError, HTTPError) as exc:
+        print('Waiting to establish HTTP connection')
+        time.sleep(5)
+        send_push_message(token, title, message, extra=None)
         # Encountered some Connection or HTTP error - retry a few times in
         # case it is transient.
         rollbar.report_exc_info(
@@ -47,10 +49,12 @@ def send_push_message(token, title, message, extra=None):
         # flows.
         response.validate_response()
     except DeviceNotRegisteredError:
+        print('exception DeviceNotRegisteredError')
         # Mark the push token as inactive
         from notifications.models import PushToken
         PushToken.objects.filter(token=token).update(active=False)
     except PushTicketError as exc:
+        print('exception PushTicketError')
         # Encountered some other per-notification error.
         rollbar.report_exc_info(
             extra_data={
